@@ -73,7 +73,8 @@ export class VaultIndexer extends Events {
    */
   private async waitForMetadataCache(): Promise<void> {
     // Check if metadata cache is already resolved
-    if (this.app.metadataCache.initialized) {
+    // Note: initialized property exists at runtime but not in type definitions
+    if ((this.app.metadataCache as any).initialized) {
       return;
     }
 
