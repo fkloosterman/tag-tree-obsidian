@@ -105,27 +105,27 @@ export class TreeToolbar {
     setIcon(depthIcon, "layers");
     depthLabel.createSpan({ text: "Depth:" });
 
-    const depthDropdown = depthSection.createEl("select", {
-      cls: "dropdown toolbar-dropdown",
-      attr: { "aria-label": "Expand to depth" },
-    });
+    // Create depth level buttons
+    const depthButtonsContainer = depthSection.createDiv("toolbar-depth-buttons");
 
     for (const option of this.depthOptions) {
-      depthDropdown.createEl("option", {
-        value: String(option.value),
-        text: option.label,
+      const btn = depthButtonsContainer.createEl("button", {
+        cls: "toolbar-depth-button",
+        text: option.value === -1 ? "All" : String(option.value),
+        attr: {
+          "aria-label": `Expand to ${option.label}`,
+          "title": `Expand to ${option.label}`,
+        },
+      });
+
+      btn.addEventListener("click", () => {
+        if (option.value === -1) {
+          this.callbacks.onExpandAll();
+        } else {
+          this.callbacks.onExpandToDepth(option.value);
+        }
       });
     }
-
-    depthDropdown.addEventListener("change", () => {
-      const depth = parseInt(depthDropdown.value);
-      if (depth === -1) {
-        // "All" selected - expand all nodes
-        this.callbacks.onExpandAll();
-      } else {
-        this.callbacks.onExpandToDepth(depth);
-      }
-    });
   }
 
   /**

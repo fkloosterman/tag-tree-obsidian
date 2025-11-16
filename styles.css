@@ -339,6 +339,53 @@
   color: var(--text-normal);
 }
 
+/* Toolbar depth buttons container */
+.toolbar-depth-buttons {
+  display: flex;
+  gap: 2px;
+}
+
+/* Individual depth button */
+.toolbar-depth-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 22px;
+  padding: 2px 6px;
+  font-size: var(--font-ui-smaller);
+  background-color: var(--interactive-normal);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 3px;
+  color: var(--text-normal);
+  cursor: pointer;
+  transition: all 0.1s;
+  font-weight: 500;
+}
+
+.toolbar-depth-button:hover {
+  background-color: var(--interactive-hover);
+}
+
+.toolbar-depth-button:active {
+  background-color: var(--interactive-active);
+}
+
+.toolbar-depth-button:focus {
+  outline: 2px solid var(--background-modifier-border-focus);
+  outline-offset: -1px;
+}
+
+/* Dark theme adjustments for depth buttons */
+.theme-dark .toolbar-depth-button {
+  background-color: var(--background-primary-alt);
+}
+
+/* Light theme adjustments for depth buttons */
+.theme-light .toolbar-depth-button {
+  background-color: var(--background-primary);
+}
+
 /* Toolbar toggle (for Show Files) */
 .toolbar-toggle {
   display: flex;
