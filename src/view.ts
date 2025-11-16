@@ -55,8 +55,9 @@ export class TagTreeView extends ItemView {
     } catch (error) {
       console.error("[TagTree] Error initializing tag tree view:", error);
       loadingEl.remove();
+      const errorMessage = error instanceof Error ? error.message : String(error);
       container.createDiv("tag-tree-error", (el) => {
-        el.textContent = `Error loading tag tree: ${error.message}`;
+        el.textContent = `Error loading tag tree: ${errorMessage}`;
       });
     }
   }
