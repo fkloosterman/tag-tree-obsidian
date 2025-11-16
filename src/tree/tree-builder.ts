@@ -175,11 +175,11 @@ export class TreeBuilder {
 
     // Sort children according to mode
     node.children.sort((a, b) => {
-      // Always keep tag/property nodes before file nodes
-      if (a.type !== "file" && b.type === "file") {
+      // Always keep file nodes before tag/property nodes at the same level
+      if (a.type === "file" && b.type !== "file") {
         return -1;
       }
-      if (a.type === "file" && b.type !== "file") {
+      if (a.type !== "file" && b.type === "file") {
         return 1;
       }
 
