@@ -35,6 +35,10 @@ export class TagTreeView extends ItemView {
     return "Tag Tree";
   }
 
+  getIcon() {
+    return "tree-deciduous";
+  }
+
   /**
    * Get state for workspace persistence
    */
