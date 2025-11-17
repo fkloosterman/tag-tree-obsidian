@@ -583,11 +583,11 @@ export class TreeBuilder {
             }
           }
 
-          // Add files that end here if showPartialMatches=true or if we're at last level
-          if (showPartialMatches || tagDepth === -1) {
-            for (const file of filesEndingHere) {
-              node.children.push(createFileNode(file, treeDepth + subDepth + 1, node.id));
-            }
+          // For single-level tag hierarchies, always show files at their natural tag level
+          // They are not "partial matches" - they fully match the tag they have
+          // The showPartialMatches setting only applies to multi-level hierarchies
+          for (const file of filesEndingHere) {
+            node.children.push(createFileNode(file, treeDepth + subDepth + 1, node.id));
           }
         } else {
           // Multi-level hierarchy, use all files for recursion
