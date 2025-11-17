@@ -255,6 +255,16 @@ export class TreeBuilder {
    * @returns Root tree node with hierarchical structure
    */
   buildFromHierarchy(config: HierarchyConfig): TreeNode {
+    // Optimization: For simple single-level tag hierarchies with unlimited depth,
+    // use buildFromTags which is more efficient for full nested hierarchies
+    if (this.shouldUseBuildFromTags(config)) {
+      const tagLevel = config.levels[0] as TagHierarchyLevel;
+      return this.buildFromTags(
+        config.rootTag?.replace(/^#/, ""),
+        config.sortMode || "alpha-asc"
+      );
+    }
+
     // Get initial file set (optionally filtered by root tag)
     const allFiles = this.indexer.getAllFiles();
     let files: TFile[];
@@ -293,6 +303,42 @@ export class TreeBuilder {
   }
 
   /**
+   * Check if we should use buildFromTags for optimization
+   *
+   * @param config - Hierarchy configuration
+   * @returns True if should delegate to buildFromTags
+   */
+  private shouldUseBuildFromTags(config: HierarchyConfig): boolean {
+    // Must be a single-level hierarchy
+    if (config.levels.length !== 1) {
+      return false;
+    }
+
+    const level = config.levels[0];
+
+    // Must be a tag level
+    if (level.type !== "tag") {
+      return false;
+    }
+
+    const tagLevel = level as TagHierarchyLevel;
+
+    // Must have unlimited depth (-1)
+    // If depth is 1 or greater, we need to use buildFromHierarchy to honor that limit
+    if (tagLevel.depth !== -1) {
+      return false;
+    }
+
+    // Must not use advanced features
+    if (tagLevel.virtual) {
+      return false;
+    }
+
+    // Simple unlimited-depth tag hierarchy - use buildFromTags for optimization
+    return true;
+  }
+
+  /**
    * Recursively build tree levels according to hierarchy configuration
    *
    * @param files - Files to process at this level
@@ -327,13 +373,14 @@ export class TreeBuilder {
 
     const level = levels[depth];
 
-    // Handle tag levels with depth > 1 specially
+    // Handle tag levels with depth > 1 or depth = -1 (unlimited) specially
     if (level.type === "tag") {
       const tagLevel = level as TagHierarchyLevel;
       const tagDepth = tagLevel.depth || 1;
 
-      if (tagDepth > 1) {
+      if (tagDepth > 1 || tagDepth === -1) {
         // Multi-depth tag level - build intermediate tag levels
+        // For depth=-1, this will recurse until no more nested tags exist
         return this.buildMultiDepthTagLevel(
           files,
           levels,
@@ -461,27 +508,19 @@ export class TreeBuilder {
     const tagDepth = tagLevel.depth || 1;
     const treeDepth = hierarchyDepth;
 
-    // If we've consumed all sub-depths of this tag level, move to next hierarchy level
-    if (subDepth >= tagDepth) {
-      return this.buildLevelRecursive(
-        files,
-        levels,
-        hierarchyDepth + 1,
-        parentTagPath,
-        showPartialMatches,
-        parentId
-      );
-    }
-
     // Group files by tags at current sub-depth (1 level at a time)
     const groups = new Map<string, TFile[]>();
 
     for (const file of files) {
+      // Always look for immediate children (depth 1) relative to parent
+      // The subDepth counter is only for tracking when to stop recursion
+      const targetDepth = parentTagPath ? 1 : (subDepth + 1);
+
       const matchingTags = this.findMatchingTagsAtDepth(
         file,
         tagLevel.key,
         parentTagPath,
-        subDepth + 1 // Find tags at this specific depth
+        targetDepth
       );
 
       for (const tag of matchingTags) {
@@ -490,6 +529,20 @@ export class TreeBuilder {
         }
         groups.get(tag)!.push(file);
       }
+    }
+
+    // If no tags found at this depth, we've reached the end of tag nesting
+    // For depth=-1 (unlimited), this is when we stop recursing
+    // For depth>1, we check if we've consumed all sub-depths
+    if (groups.size === 0 || (tagDepth !== -1 && subDepth >= tagDepth)) {
+      return this.buildLevelRecursive(
+        files,
+        levels,
+        hierarchyDepth + 1,
+        parentTagPath,
+        showPartialMatches,
+        parentId
+      );
     }
 
     // Create nodes for each group
@@ -503,12 +556,48 @@ export class TreeBuilder {
       });
 
       // Check if there are more sub-depths to process
-      if (subDepth + 1 < tagDepth) {
+      // For depth=-1 (unlimited), always continue recursing (will stop when no more tags found)
+      // For depth>1, check if we've reached the final tag depth
+      const shouldContinueRecursing = (tagDepth === -1) || (subDepth + 1 < tagDepth);
+
+      if (shouldContinueRecursing) {
         // Not at the final tag depth yet
+        // For single-level tag hierarchies, we need to handle files whose most specific
+        // tag is at THIS level (they don't have deeper nested tags)
+        const filesEndingHere: TFile[] = [];
+        const filesWithDeeperTags: TFile[] = [];
+
+        if (hierarchyDepth + 1 >= levels.length) {
+          // This is a single-level tag hierarchy, check for files ending at this tag
+          for (const file of groupFiles) {
+            const fileTags = Array.from(this.indexer.getFileTags(file));
+            // Check if this file has any tags deeper than groupKey
+            const hasDeeper = fileTags.some(tag =>
+              tag.startsWith(groupKey + "/") && tag.length > groupKey.length + 1
+            );
+
+            if (hasDeeper) {
+              filesWithDeeperTags.push(file);
+            } else {
+              filesEndingHere.push(file);
+            }
+          }
+
+          // For single-level tag hierarchies, always show files at their natural tag level
+          // They are not "partial matches" - they fully match the tag they have
+          // The showPartialMatches setting only applies to multi-level hierarchies
+          for (const file of filesEndingHere) {
+            node.children.push(createFileNode(file, treeDepth + subDepth + 1, node.id));
+          }
+        } else {
+          // Multi-level hierarchy, use all files for recursion
+          filesWithDeeperTags.push(...groupFiles);
+        }
+
         if (tagLevel.virtual && hierarchyDepth + 1 < levels.length) {
           // Virtual mode: insert next hierarchy level before continuing with tag sub-depths
           this.buildVirtualTagLevel(
-            groupFiles,
+            filesWithDeeperTags,
             levels,
             hierarchyDepth,
             tagLevel,
@@ -521,7 +610,7 @@ export class TreeBuilder {
         } else {
           // Non-virtual mode: continue directly to next tag sub-depth
           const childTreeNode = this.buildMultiDepthTagLevel(
-            groupFiles,
+            filesWithDeeperTags,
             levels,
             hierarchyDepth,
             tagLevel,
