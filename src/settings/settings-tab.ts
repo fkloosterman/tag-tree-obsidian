@@ -3,9 +3,13 @@ import type TagTreePlugin from "../main";
 import {
   HierarchyConfig,
   HierarchyLevel,
+  TagHierarchyLevel,
+  PropertyHierarchyLevel,
   validateHierarchyConfig,
   createHierarchyConfig,
   createHierarchyLevel,
+  createTagLevel,
+  createPropertyLevel,
 } from "../types/hierarchy-config";
 import { SortMode } from "../types/view-state";
 
@@ -319,7 +323,8 @@ class ViewEditorModal extends Modal {
       // Create new view with defaults
       this.workingView = createHierarchyConfig({
         name: "New View",
-        levels: [{ type: "tag", key: "" }],
+        levels: [createTagLevel({ key: "" })],
+        showPartialMatches: false,
       });
     }
   }
@@ -404,6 +409,18 @@ class ViewEditorModal extends Modal {
           })
       );
 
+    // Show partial matches
+    new Setting(containerEl)
+      .setName("Show files with partial matches")
+      .setDesc("Show files at the deepest level they match (even if they don't match all levels)")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.workingView.showPartialMatches ?? false)
+          .onChange((value) => {
+            this.workingView.showPartialMatches = value;
+          })
+      );
+
     // Hierarchy levels section
     containerEl.createEl("h3", { text: "Hierarchy Levels" });
     containerEl.createEl("p", {
@@ -440,27 +457,31 @@ class ViewEditorModal extends Modal {
 
     this.workingView.levels.forEach((level, index) => {
       const levelContainer = containerEl.createDiv("tag-tree-level-item");
+      levelContainer.createEl("h4", { text: `Level ${index + 1}` });
 
-      const levelSetting = new Setting(levelContainer)
-        .setName(`Level ${index + 1}`)
+      // Type selector
+      new Setting(levelContainer)
+        .setName("Type")
         .addDropdown((dropdown) =>
           dropdown
             .addOption("tag", "Tag")
             .addOption("property", "Property")
             .setValue(level.type)
             .onChange((value) => {
-              level.type = value as "tag" | "property";
+              // Replace level with new type-specific level
+              const newType = value as "tag" | "property";
+              if (newType === "tag") {
+                this.workingView.levels[index] = createTagLevel({
+                  key: level.key,
+                  label: level.label,
+                });
+              } else {
+                this.workingView.levels[index] = createPropertyLevel({
+                  key: level.key,
+                  label: level.label,
+                });
+              }
               this.renderEditor(this.contentEl); // Re-render to update
-            })
-        )
-        .addText((text) =>
-          text
-            .setPlaceholder(
-              level.type === "tag" ? "Tag prefix (e.g., project)" : "Property name (e.g., status)"
-            )
-            .setValue(level.key)
-            .onChange((value) => {
-              level.key = value;
             })
         )
         .addExtraButton((button) =>
@@ -504,6 +525,85 @@ class ViewEditorModal extends Modal {
               }
             })
         );
+
+      // Key field
+      new Setting(levelContainer)
+        .setName(level.type === "tag" ? "Tag prefix" : "Property name")
+        .setDesc(
+          level.type === "tag"
+            ? "Tag root to match (empty = all base tags)"
+            : "Name of the frontmatter property"
+        )
+        .addText((text) =>
+          text
+            .setPlaceholder(
+              level.type === "tag" ? "project" : "status"
+            )
+            .setValue(level.key)
+            .onChange((value) => {
+              level.key = value;
+            })
+        );
+
+      // Type-specific fields
+      if (level.type === "tag") {
+        const tagLevel = level as TagHierarchyLevel;
+
+        // Depth field
+        new Setting(levelContainer)
+          .setName("Depth")
+          .setDesc("Number of tag levels to span (minimum 1)")
+          .addText((text) =>
+            text
+              .setPlaceholder("1")
+              .setValue(String(tagLevel.depth ?? 1))
+              .onChange((value) => {
+                const num = parseInt(value);
+                if (!isNaN(num) && num >= 1) {
+                  tagLevel.depth = num;
+                }
+              })
+          );
+
+        // Virtual toggle
+        new Setting(levelContainer)
+          .setName("Virtual levels")
+          .setDesc("Insert next hierarchy level after each intermediate tag level")
+          .addToggle((toggle) =>
+            toggle
+              .setValue(tagLevel.virtual ?? false)
+              .onChange((value) => {
+                tagLevel.virtual = value;
+              })
+          );
+      } else if (level.type === "property") {
+        const propLevel = level as PropertyHierarchyLevel;
+
+        // Separate list values toggle
+        new Setting(levelContainer)
+          .setName("Separate list values")
+          .setDesc("Treat list properties as separate values (true) or single value (false)")
+          .addToggle((toggle) =>
+            toggle
+              .setValue(propLevel.separateListValues ?? true)
+              .onChange((value) => {
+                propLevel.separateListValues = value;
+              })
+          );
+      }
+
+      // Optional label
+      new Setting(levelContainer)
+        .setName("Display label (optional)")
+        .setDesc("Custom label to display instead of key")
+        .addText((text) =>
+          text
+            .setPlaceholder(level.key)
+            .setValue(level.label || "")
+            .onChange((value) => {
+              level.label = value.trim() || undefined;
+            })
+        );
     });
 
     // Add level button
@@ -512,7 +612,7 @@ class ViewEditorModal extends Modal {
         .setButtonText("+ Add Level")
         .onClick(() => {
           this.workingView.levels.push(
-            createHierarchyLevel({ type: "tag", key: "" })
+            createTagLevel({ key: "" })
           );
           this.renderEditor(this.contentEl); // Re-render
         })
