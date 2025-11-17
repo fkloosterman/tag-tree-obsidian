@@ -54,6 +54,7 @@ export function createTagNode(
   options?: {
     label?: string;
     showFullPath?: boolean;
+    parentId?: string;
   }
 ): TreeNode {
   const segments = tagPath.split("/");
@@ -76,8 +77,12 @@ export function createTagNode(
     name = tagName;
   }
 
+  // Create unique ID by including parent context
+  const nodeId = `tag:${tagPath}`;
+  const id = options?.parentId ? `${options.parentId}/${nodeId}` : nodeId;
+
   return {
-    id: `tag:${tagPath}`,
+    id,
     name,
     type: "tag",
     children: [],
@@ -99,6 +104,7 @@ export function createPropertyGroupNode(
   options?: {
     label?: string;
     showPropertyName?: boolean;
+    parentId?: string;
   }
 ): TreeNode {
   let name: string;
@@ -116,8 +122,12 @@ export function createPropertyGroupNode(
     name = valueName;
   }
 
+  // Create unique ID by including parent context
+  const nodeId = `prop:${propertyKey}:${propertyValue}`;
+  const id = options?.parentId ? `${options.parentId}/${nodeId}` : nodeId;
+
   return {
-    id: `prop:${propertyKey}:${propertyValue}`,
+    id,
     name,
     type: "property-group",
     children: [],
@@ -131,9 +141,17 @@ export function createPropertyGroupNode(
 /**
  * Factory function to create a file node
  */
-export function createFileNode(file: TFile, depth: number): TreeNode {
+export function createFileNode(
+  file: TFile,
+  depth: number,
+  parentId?: string
+): TreeNode {
+  // File paths are already unique, but include parent for consistency
+  const nodeId = `file:${file.path}`;
+  const id = parentId ? `${parentId}/${nodeId}` : nodeId;
+
   return {
-    id: `file:${file.path}`,
+    id,
     name: file.basename,
     type: "file",
     children: [],
