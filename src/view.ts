@@ -293,6 +293,13 @@ export class TagTreeView extends ItemView {
   }
 
   /**
+   * Switch to a different view (public method for command access)
+   */
+  switchToView(viewName: string): void {
+    this.handleViewChange(viewName);
+  }
+
+  /**
    * Save current view state (debounced)
    */
   saveViewState(): void {
@@ -316,10 +323,15 @@ export class TagTreeView extends ItemView {
       return;
     }
 
+    const treeContent = this.containerEl.querySelector(
+      ".tag-tree-content"
+    ) as HTMLElement;
+
     const state: ViewState = {
       expandedNodes: Array.from(this.treeComponent.getExpandedNodes()),
       showFiles: this.treeComponent.getFileVisibility(),
       sortMode: this.treeComponent.getSortMode(),
+      scrollPosition: treeContent?.scrollTop ?? 0,
     };
 
     this.plugin.settings.viewStates[this.currentViewName] = state;
@@ -352,6 +364,18 @@ export class TagTreeView extends ItemView {
     // Restore sort mode
     if (state.sortMode) {
       this.treeComponent.setSortMode(state.sortMode);
+    }
+
+    // Restore scroll position (with a small delay to ensure DOM is ready)
+    if (state.scrollPosition !== undefined) {
+      setTimeout(() => {
+        const treeContent = this.containerEl.querySelector(
+          ".tag-tree-content"
+        ) as HTMLElement;
+        if (treeContent) {
+          treeContent.scrollTop = state.scrollPosition ?? 0;
+        }
+      }, 50);
     }
   }
 }
