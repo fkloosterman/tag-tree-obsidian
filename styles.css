@@ -710,9 +710,9 @@
   color: var(--level-6-color);
 }
 
-/* Files should NOT get level colors - keep default icon color */
+/* Files should NOT get level colors - use default icon color */
 .tag-tree-content[data-level-color-mode="icon"] .tree-node[data-node-type="file"] .tree-node-icon {
-  color: inherit;
+  color: var(--text-muted);
 }
 
 /* File color in icon mode (only when explicitly set) */
