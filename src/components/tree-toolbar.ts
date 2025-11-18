@@ -126,11 +126,11 @@ export class TreeToolbar {
       )
       .setValue(this.currentViewName)
       .onChange((value) => {
-        this.currentViewName = value;
+        // Don't update currentViewName here - let setCurrentViewName do it
+        // This ensures the re-render happens when setCurrentViewName is called
         if (this.callbacks.onViewChange) {
           this.callbacks.onViewChange(value);
         }
-        // Note: Header will be updated when setCurrentViewName is called externally
       });
   }
 
