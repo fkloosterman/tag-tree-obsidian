@@ -124,9 +124,14 @@ export class TreeComponent {
     nodeEl.dataset.nodeId = node.id;
     nodeEl.dataset.nodeType = node.type;
 
-    // Add hierarchy level index for styling
-    if (node.metadata?.levelIndex !== undefined) {
+    // Add hierarchy level index for styling (but NOT for file nodes)
+    if (node.metadata?.levelIndex !== undefined && node.type !== "file") {
       nodeEl.dataset.levelIndex = String(node.metadata.levelIndex);
+    }
+
+    // Debug: Check if files are incorrectly getting levelIndex
+    if (node.type === "file" && node.metadata?.levelIndex !== undefined) {
+      console.warn(`[TagTree] File node incorrectly has levelIndex: ${node.metadata.levelIndex}`, node);
     }
 
     // Store in cache for smart updates
