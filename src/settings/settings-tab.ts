@@ -485,12 +485,16 @@ class ViewEditorModal extends Modal {
       // File color
       new Setting(containerEl)
         .setName("File color (optional)")
-        .setDesc("Custom color for file nodes (leave empty for no color)")
+        .setDesc("Custom color for file nodes (no color by default)")
         .addColorPicker((color) =>
           color
             .setValue(this.workingView.fileColor || "#ffffff")
             .onChange((value) => {
-              this.workingView.fileColor = value || undefined;
+              // Don't save white as the default - only save if user explicitly chose a color
+              // (white is just the picker's default display value)
+              if (this.workingView.fileColor || value.toLowerCase() !== "#ffffff") {
+                this.workingView.fileColor = value;
+              }
             })
         )
         .addExtraButton((button) =>
@@ -740,7 +744,12 @@ class ViewEditorModal extends Modal {
             color
               .setValue(level.color || defaultColor)
               .onChange((value) => {
-                level.color = value;
+                // Only save if different from default (normalize for comparison)
+                if (value.toLowerCase() !== defaultColor.toLowerCase()) {
+                  level.color = value;
+                } else {
+                  level.color = undefined;
+                }
               })
           )
           .addExtraButton((button) =>

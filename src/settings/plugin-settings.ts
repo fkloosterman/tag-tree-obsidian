@@ -21,15 +21,16 @@ export interface TagTreeSettings {
 /**
  * Default color palette for hierarchy levels
  * Designed to work well in both light and dark themes
+ * Using hex colors for compatibility with Obsidian's color picker
  */
 export const DEFAULT_LEVEL_COLORS = [
-  "hsl(210, 70%, 85%)",  // Soft blue
-  "hsl(150, 60%, 85%)",  // Soft green
-  "hsl(45, 80%, 85%)",   // Soft yellow
-  "hsl(280, 60%, 85%)",  // Soft purple
-  "hsl(15, 70%, 85%)",   // Soft orange
-  "hsl(330, 60%, 85%)",  // Soft pink
-  "hsl(180, 60%, 85%)",  // Soft cyan
+  "#b3d9ff",  // Soft blue
+  "#b3f0d9",  // Soft green
+  "#fff0b3",  // Soft yellow
+  "#e6d9ff",  // Soft purple
+  "#ffd9b3",  // Soft orange
+  "#ffd9f0",  // Soft pink
+  "#b3f0ff",  // Soft cyan
 ];
 
 /**
