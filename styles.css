@@ -603,3 +603,136 @@
     max-height: 400px;
   }
 }
+
+/* ========================================
+   Hierarchy Level Colors (Per-View)
+   ======================================== */
+
+/* Background mode - use CSS variables set by view.ts */
+.tag-tree-content[data-level-color-mode="background"] .tree-node[data-level-index="0"]:not([data-node-type="file"]) > .tree-node-header {
+  background-color: var(--level-0-color);
+}
+.tag-tree-content[data-level-color-mode="background"] .tree-node[data-level-index="1"]:not([data-node-type="file"]) > .tree-node-header {
+  background-color: var(--level-1-color);
+}
+.tag-tree-content[data-level-color-mode="background"] .tree-node[data-level-index="2"]:not([data-node-type="file"]) > .tree-node-header {
+  background-color: var(--level-2-color);
+}
+.tag-tree-content[data-level-color-mode="background"] .tree-node[data-level-index="3"]:not([data-node-type="file"]) > .tree-node-header {
+  background-color: var(--level-3-color);
+}
+.tag-tree-content[data-level-color-mode="background"] .tree-node[data-level-index="4"]:not([data-node-type="file"]) > .tree-node-header {
+  background-color: var(--level-4-color);
+}
+.tag-tree-content[data-level-color-mode="background"] .tree-node[data-level-index="5"]:not([data-node-type="file"]) > .tree-node-header {
+  background-color: var(--level-5-color);
+}
+.tag-tree-content[data-level-color-mode="background"] .tree-node[data-level-index="6"]:not([data-node-type="file"]) > .tree-node-header {
+  background-color: var(--level-6-color);
+}
+
+/* Hover effect for background mode */
+.tag-tree-content[data-level-color-mode="background"] .tree-node[data-level-index]:not([data-node-type="file"]) > .tree-node-header:hover {
+  filter: brightness(0.95);
+}
+
+/* Files should NOT get level colors - only custom file color */
+.tag-tree-content[data-level-color-mode="background"] .tree-node[data-node-type="file"] .tree-node-header {
+  background-color: transparent;
+}
+
+/* File color in background mode (only when explicitly set) */
+.tag-tree-content[data-level-color-mode="background"][data-has-file-color] .tree-node[data-node-type="file"] .tree-node-header {
+  background-color: var(--file-color);
+}
+
+/* Border mode */
+.tag-tree-content[data-level-color-mode="border"] .tree-node[data-level-index="0"]:not([data-node-type="file"]) > .tree-node-header {
+  border-left: 3px solid var(--level-0-color);
+  padding-left: 5px;
+}
+.tag-tree-content[data-level-color-mode="border"] .tree-node[data-level-index="1"]:not([data-node-type="file"]) > .tree-node-header {
+  border-left: 3px solid var(--level-1-color);
+  padding-left: 5px;
+}
+.tag-tree-content[data-level-color-mode="border"] .tree-node[data-level-index="2"]:not([data-node-type="file"]) > .tree-node-header {
+  border-left: 3px solid var(--level-2-color);
+  padding-left: 5px;
+}
+.tag-tree-content[data-level-color-mode="border"] .tree-node[data-level-index="3"]:not([data-node-type="file"]) > .tree-node-header {
+  border-left: 3px solid var(--level-3-color);
+  padding-left: 5px;
+}
+.tag-tree-content[data-level-color-mode="border"] .tree-node[data-level-index="4"]:not([data-node-type="file"]) > .tree-node-header {
+  border-left: 3px solid var(--level-4-color);
+  padding-left: 5px;
+}
+.tag-tree-content[data-level-color-mode="border"] .tree-node[data-level-index="5"]:not([data-node-type="file"]) > .tree-node-header {
+  border-left: 3px solid var(--level-5-color);
+  padding-left: 5px;
+}
+.tag-tree-content[data-level-color-mode="border"] .tree-node[data-level-index="6"]:not([data-node-type="file"]) > .tree-node-header {
+  border-left: 3px solid var(--level-6-color);
+  padding-left: 5px;
+}
+
+/* Files should NOT get level colors - only custom file color */
+.tag-tree-content[data-level-color-mode="border"] .tree-node[data-node-type="file"] .tree-node-header {
+  border-left: none;
+}
+
+/* File color in border mode (only when explicitly set) */
+.tag-tree-content[data-level-color-mode="border"][data-has-file-color] .tree-node[data-node-type="file"] .tree-node-header {
+  border-left: 3px solid var(--file-color);
+  padding-left: 5px;
+}
+
+/* Icon mode */
+.tag-tree-content[data-level-color-mode="icon"] .tree-node[data-level-index="0"]:not([data-node-type="file"]) > .tree-node-header > .tree-node-icon {
+  color: var(--level-0-color);
+}
+.tag-tree-content[data-level-color-mode="icon"] .tree-node[data-level-index="1"]:not([data-node-type="file"]) > .tree-node-header > .tree-node-icon {
+  color: var(--level-1-color);
+}
+.tag-tree-content[data-level-color-mode="icon"] .tree-node[data-level-index="2"]:not([data-node-type="file"]) > .tree-node-header > .tree-node-icon {
+  color: var(--level-2-color);
+}
+.tag-tree-content[data-level-color-mode="icon"] .tree-node[data-level-index="3"]:not([data-node-type="file"]) > .tree-node-header > .tree-node-icon {
+  color: var(--level-3-color);
+}
+.tag-tree-content[data-level-color-mode="icon"] .tree-node[data-level-index="4"]:not([data-node-type="file"]) > .tree-node-header > .tree-node-icon {
+  color: var(--level-4-color);
+}
+.tag-tree-content[data-level-color-mode="icon"] .tree-node[data-level-index="5"]:not([data-node-type="file"]) > .tree-node-header > .tree-node-icon {
+  color: var(--level-5-color);
+}
+.tag-tree-content[data-level-color-mode="icon"] .tree-node[data-level-index="6"]:not([data-node-type="file"]) > .tree-node-header > .tree-node-icon {
+  color: var(--level-6-color);
+}
+
+/* Files should NOT get level colors - use default icon color */
+.tag-tree-content[data-level-color-mode="icon"] .tree-node[data-node-type="file"] .tree-node-icon {
+  color: var(--text-muted);
+}
+
+/* File color in icon mode (only when explicitly set) */
+.tag-tree-content[data-level-color-mode="icon"][data-has-file-color] .tree-node[data-node-type="file"] .tree-node-icon {
+  color: var(--file-color);
+}
+
+/* Dark theme adjustments */
+.theme-dark .tag-tree-content[data-level-color-mode="background"] .tree-node[data-level-index]:not([data-node-type="file"]) > .tree-node-header {
+  filter: brightness(0.4) saturate(1.2);
+}
+
+.theme-dark .tag-tree-content[data-level-color-mode="background"] .tree-node[data-level-index]:not([data-node-type="file"]) > .tree-node-header:hover {
+  filter: brightness(0.5) saturate(1.2);
+}
+
+.theme-dark .tag-tree-content[data-level-color-mode="border"] .tree-node[data-level-index]:not([data-node-type="file"]) > .tree-node-header {
+  filter: brightness(1.5);
+}
+
+.theme-dark .tag-tree-content[data-level-color-mode="icon"] .tree-node[data-level-index]:not([data-node-type="file"]) > .tree-node-header > .tree-node-icon {
+  filter: brightness(1.8) saturate(1.2);
+}

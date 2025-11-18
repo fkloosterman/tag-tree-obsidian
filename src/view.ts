@@ -3,7 +3,7 @@ import { VaultIndexer } from "./indexer/vault-indexer";
 import { TreeBuilder } from "./tree/tree-builder";
 import { TreeComponent } from "./components/tree-component";
 import { TreeToolbar } from "./components/tree-toolbar";
-import { ViewState, SortMode } from "./types/view-state";
+import { ViewState, SortMode, FileSortMode, DEFAULT_VIEW_STATE } from "./types/view-state";
 import { SearchQueryBuilder } from "./utils/search-query-builder";
 import { ObsidianSearch } from "./utils/obsidian-search";
 import { TreeNode } from "./types/tree-node";
@@ -92,7 +92,7 @@ export class TagTreeView extends ItemView {
       // Remove loading indicator
       loadingEl.remove();
 
-      // Create tree component with search callback
+      // Create tree component with callbacks
       this.treeComponent = new TreeComponent(
         this.app,
         () => {
@@ -100,6 +100,9 @@ export class TagTreeView extends ItemView {
         },
         (node: TreeNode) => {
           this.handleNodeSearch(node);
+        },
+        (node: TreeNode, mode: SortMode) => {
+          this.handleNodeSortChange(node, mode);
         }
       );
 
@@ -110,8 +113,8 @@ export class TagTreeView extends ItemView {
       const toolbarContainer = container.createDiv("tag-tree-toolbar-container");
       this.toolbar = new TreeToolbar(
         {
-          onSortChange: (mode: SortMode) => {
-            this.handleSortChange(mode);
+          onFileSortChange: (mode: FileSortMode) => {
+            this.handleFileSortChange(mode);
           },
           onCollapseAll: () => {
             this.treeComponent.collapseAll();
@@ -133,7 +136,7 @@ export class TagTreeView extends ItemView {
             this.handleViewChange(viewName);
           },
         },
-        this.treeComponent.getSortMode(),
+        this.treeComponent.getFileSortMode(),
         this.treeComponent.getFileVisibility(),
         this.plugin.settings.savedViews,
         this.currentViewName
@@ -176,17 +179,28 @@ export class TagTreeView extends ItemView {
   }
 
   /**
-   * Handle sort mode change from toolbar
+   * Handle file sort mode change from toolbar
    */
-  private handleSortChange(mode: SortMode): void {
+  private handleFileSortChange(mode: FileSortMode): void {
     if (!this.treeBuilder || !this.treeComponent) {
       return;
     }
 
-    // Update tree component sort mode
-    this.treeComponent.setSortMode(mode);
+    // Update ViewState FIRST so buildAndRenderTree uses the new sort mode
+    const viewState = this.plugin.settings.viewStates[this.currentViewName];
+    if (!viewState) {
+      this.plugin.settings.viewStates[this.currentViewName] = {
+        ...DEFAULT_VIEW_STATE,
+        fileSortMode: mode,
+      };
+    } else {
+      viewState.fileSortMode = mode;
+    }
 
-    // Rebuild and re-render tree
+    // Update tree component file sort mode (for consistency)
+    this.treeComponent.setFileSortMode(mode);
+
+    // Rebuild and re-render tree (will now use the updated ViewState)
     const container = this.containerEl.querySelector(
       ".tag-tree-content"
     ) as HTMLElement;
@@ -196,6 +210,56 @@ export class TagTreeView extends ItemView {
 
     // Save state
     this.saveViewState();
+  }
+
+  /**
+   * Handle node sort mode change from context menu
+   */
+  private handleNodeSortChange(node: TreeNode, mode: SortMode): void {
+    if (!this.treeBuilder || !this.treeComponent) {
+      return;
+    }
+
+    // Get the level index from node metadata
+    const levelIndex = node.metadata?.levelIndex;
+    if (levelIndex === undefined) {
+      console.warn("[TagTree] Cannot change sort mode: node has no levelIndex", node);
+      return;
+    }
+
+    // Get the current view configuration
+    const viewConfig = this.plugin.settings.savedViews.find(
+      (v) => v.name === this.currentViewName
+    );
+
+    if (!viewConfig) {
+      console.error(
+        `[TagTree] Cannot change sort mode: view "${this.currentViewName}" not found`
+      );
+      return;
+    }
+
+    // Check if level exists
+    if (levelIndex >= viewConfig.levels.length) {
+      console.warn(
+        `[TagTree] Cannot change sort mode: level ${levelIndex} does not exist in view config`
+      );
+      return;
+    }
+
+    // Update the hierarchy level's sortBy property
+    viewConfig.levels[levelIndex].sortBy = mode;
+
+    // Save settings
+    this.plugin.saveSettings();
+
+    // Rebuild and re-render tree with new sort mode
+    const container = this.containerEl.querySelector(
+      ".tag-tree-content"
+    ) as HTMLElement;
+    if (container) {
+      this.buildAndRenderTree(container);
+    }
   }
 
   /**
@@ -221,8 +285,8 @@ export class TagTreeView extends ItemView {
       if (viewState.showFiles !== undefined) {
         this.treeComponent.setFileVisibility(viewState.showFiles);
       }
-      if (viewState.sortMode) {
-        this.treeComponent.setSortMode(viewState.sortMode);
+      if (viewState.fileSortMode) {
+        this.treeComponent.setFileSortMode(viewState.fileSortMode);
       }
     } else {
       // No saved state, use defaults
@@ -262,9 +326,56 @@ export class TagTreeView extends ItemView {
       return;
     }
 
+    // Apply level color mode to the tree container
+    if (viewConfig.levelColorMode && viewConfig.levelColorMode !== "none") {
+      container.setAttribute("data-level-color-mode", viewConfig.levelColorMode);
+    } else {
+      container.removeAttribute("data-level-color-mode");
+    }
+
+    // Set data attribute if file color is configured
+    if (viewConfig.fileColor) {
+      container.setAttribute("data-has-file-color", "true");
+    } else {
+      container.removeAttribute("data-has-file-color");
+    }
+
+    // Apply custom colors as CSS variables
+    if (viewConfig.levelColorMode && viewConfig.levelColorMode !== "none") {
+      // Default colors (hex format for compatibility)
+      const DEFAULT_LEVEL_COLORS = [
+        "#b3d9ff",  // Soft blue
+        "#b3f0d9",  // Soft green
+        "#fff0b3",  // Soft yellow
+        "#e6d9ff",  // Soft purple
+        "#ffd9b3",  // Soft orange
+        "#ffd9f0",  // Soft pink
+        "#b3f0ff",  // Soft cyan
+      ];
+
+      viewConfig.levels.forEach((level, index) => {
+        // Use custom color if set, otherwise use default palette color
+        const color = level.color || DEFAULT_LEVEL_COLORS[index % DEFAULT_LEVEL_COLORS.length];
+        container.style.setProperty(`--level-${index}-color`, color);
+      });
+
+      if (viewConfig.fileColor) {
+        container.style.setProperty('--file-color', viewConfig.fileColor);
+      } else {
+        container.style.removeProperty('--file-color');
+      }
+    } else {
+      // Clear CSS variables if colors are disabled
+      viewConfig.levels.forEach((level, index) => {
+        container.style.removeProperty(`--level-${index}-color`);
+      });
+      container.style.removeProperty('--file-color');
+    }
+
     // Build tree from hierarchy configuration
     // TreeBuilder will internally optimize for simple tag hierarchies (depth=-1)
-    const tree = this.treeBuilder.buildFromHierarchy(viewConfig);
+    const viewState = this.plugin.settings.viewStates[this.currentViewName];
+    const tree = this.treeBuilder.buildFromHierarchy(viewConfig, viewState);
 
     // Render tree
     this.treeComponent.render(tree, container);
@@ -339,7 +450,7 @@ export class TagTreeView extends ItemView {
     const state: ViewState = {
       expandedNodes: Array.from(this.treeComponent.getExpandedNodes()),
       showFiles: this.treeComponent.getFileVisibility(),
-      sortMode: this.treeComponent.getSortMode(),
+      fileSortMode: this.treeComponent.getFileSortMode(),
       scrollPosition: treeContent?.scrollTop ?? 0,
     };
 
@@ -370,9 +481,9 @@ export class TagTreeView extends ItemView {
       this.treeComponent.setFileVisibility(state.showFiles);
     }
 
-    // Restore sort mode
-    if (state.sortMode) {
-      this.treeComponent.setSortMode(state.sortMode);
+    // Restore file sort mode
+    if (state.fileSortMode) {
+      this.treeComponent.setFileSortMode(state.fileSortMode);
     }
 
     // Restore scroll position (with a small delay to ensure DOM is ready)

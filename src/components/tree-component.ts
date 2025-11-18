@@ -1,6 +1,6 @@
-import { App, TFile, setIcon } from "obsidian";
+import { App, TFile, Menu, setIcon } from "obsidian";
 import { TreeNode } from "../types/tree-node";
-import { SortMode } from "../types/view-state";
+import { SortMode, FileSortMode } from "../types/view-state";
 
 /**
  * TreeComponent - Renders and manages the collapsible tree UI
@@ -19,7 +19,8 @@ export class TreeComponent {
   // UI state
   private expandedNodes: Set<string> = new Set();
   private showFiles: boolean = true;
-  private sortMode: SortMode = "alpha-asc";
+  private sortMode: SortMode = "alpha-asc"; // Legacy, kept for compatibility
+  private fileSortMode: FileSortMode = "alpha-asc";
   private hasInitializedExpansion: boolean = false;
 
   // Configuration
@@ -34,6 +35,9 @@ export class TreeComponent {
   // Node search callback (triggered by Ctrl+click or Ctrl+Enter)
   private onNodeSearch?: (node: TreeNode) => void;
 
+  // Node sort change callback (triggered by right-click context menu)
+  private onNodeSortChange?: (node: TreeNode, sortMode: SortMode) => void;
+
   // Keyboard navigation state
   private focusedNodeId: string | null = null;
   private flatNodeList: TreeNode[] = [];
@@ -41,11 +45,13 @@ export class TreeComponent {
   constructor(
     app: App,
     onStateChange?: () => void,
-    onNodeSearch?: (node: TreeNode) => void
+    onNodeSearch?: (node: TreeNode) => void,
+    onNodeSortChange?: (node: TreeNode, sortMode: SortMode) => void
   ) {
     this.app = app;
     this.onStateChange = onStateChange;
     this.onNodeSearch = onNodeSearch;
+    this.onNodeSortChange = onNodeSortChange;
   }
 
   /**
@@ -117,6 +123,11 @@ export class TreeComponent {
     const nodeEl = parent.createDiv("tree-node");
     nodeEl.dataset.nodeId = node.id;
     nodeEl.dataset.nodeType = node.type;
+
+    // Add hierarchy level index for styling (but NOT for file nodes)
+    if (node.metadata?.levelIndex !== undefined && node.type !== "file") {
+      nodeEl.dataset.levelIndex = String(node.metadata.levelIndex);
+    }
 
     // Store in cache for smart updates
     this.nodeElements.set(node.id, nodeEl);
@@ -201,6 +212,15 @@ export class TreeComponent {
         this.toggleNode(node.id);
       }
     });
+
+    // Context menu handler for tag/property nodes (for sort mode change)
+    if (node.type !== "file" && this.onNodeSortChange) {
+      header.addEventListener("contextmenu", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this.showSortContextMenu(e, node);
+      });
+    }
 
     // Render children if expanded
     if (isExpanded && hasVisibleChildren) {
@@ -490,6 +510,7 @@ export class TreeComponent {
 
   /**
    * Get current sort mode (for state persistence)
+   * LEGACY: Kept for compatibility
    */
   getSortMode(): SortMode {
     return this.sortMode;
@@ -497,10 +518,29 @@ export class TreeComponent {
 
   /**
    * Set sort mode (for state restoration)
+   * LEGACY: Kept for compatibility
    */
   setSortMode(mode: SortMode): void {
     if (this.sortMode !== mode) {
       this.sortMode = mode;
+      // Notify state change
+      this.onStateChange?.();
+    }
+  }
+
+  /**
+   * Get current file sort mode (for state persistence)
+   */
+  getFileSortMode(): FileSortMode {
+    return this.fileSortMode;
+  }
+
+  /**
+   * Set file sort mode (for state restoration)
+   */
+  setFileSortMode(mode: FileSortMode): void {
+    if (this.fileSortMode !== mode) {
+      this.fileSortMode = mode;
       // Notify state change
       this.onStateChange?.();
     }
@@ -724,5 +764,48 @@ export class TreeComponent {
     if (node.children.length > 0) {
       this.toggleNode(node.id);
     }
+  }
+
+  /**
+   * Show context menu for sorting a node's children
+   */
+  private showSortContextMenu(e: MouseEvent, node: TreeNode): void {
+    if (!this.onNodeSortChange) {
+      return;
+    }
+
+    const menu = new Menu();
+
+    // Sort mode options
+    const sortModes: Array<{ mode: SortMode; label: string }> = [
+      { mode: "alpha-asc", label: "A → Z" },
+      { mode: "alpha-desc", label: "Z → A" },
+      { mode: "count-desc", label: "Count (high to low)" },
+      { mode: "count-asc", label: "Count (low to high)" },
+      { mode: "none", label: "Unsorted" },
+    ];
+
+    // Add section header
+    menu.addItem((item) => {
+      item
+        .setTitle("Sort children by:")
+        .setDisabled(true);
+    });
+
+    menu.addSeparator();
+
+    // Add sort mode options
+    sortModes.forEach(({ mode, label }) => {
+      menu.addItem((item) => {
+        item
+          .setTitle(label)
+          .onClick(() => {
+            this.onNodeSortChange!(node, mode);
+          });
+      });
+    });
+
+    // Show the menu at mouse position
+    menu.showAtMouseEvent(e);
   }
 }

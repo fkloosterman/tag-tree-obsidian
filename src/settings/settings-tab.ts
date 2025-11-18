@@ -5,13 +5,15 @@ import {
   HierarchyLevel,
   TagHierarchyLevel,
   PropertyHierarchyLevel,
+  LevelColorMode,
   validateHierarchyConfig,
   createHierarchyConfig,
   createHierarchyLevel,
   createTagLevel,
   createPropertyLevel,
 } from "../types/hierarchy-config";
-import { SortMode } from "../types/view-state";
+import { SortMode, FileSortMode } from "../types/view-state";
+import { DEFAULT_LEVEL_COLORS } from "./plugin-settings";
 
 /**
  * Settings tab for Tag Tree plugin
@@ -324,6 +326,10 @@ class ViewEditorModal extends Modal {
     // Create working copy
     if (view) {
       this.workingView = JSON.parse(JSON.stringify(view));
+      // Set default levelColorMode if not set
+      if (!this.workingView.levelColorMode) {
+        this.workingView.levelColorMode = "none";
+      }
     } else {
       // Create new view with defaults
       this.workingView = createHierarchyConfig({
@@ -381,20 +387,41 @@ class ViewEditorModal extends Modal {
           })
       );
 
-    // Default sort mode
+    // Default node sort mode
     new Setting(containerEl)
-      .setName("Default sort mode")
-      .setDesc("How to sort nodes in the tree")
+      .setName("Default node sort mode")
+      .setDesc("How to sort tag and property nodes in the tree")
       .addDropdown((dropdown) => {
         dropdown
           .addOption("alpha-asc", "Alphabetical (A-Z)")
           .addOption("alpha-desc", "Alphabetical (Z-A)")
           .addOption("count-desc", "File count (Most first)")
           .addOption("count-asc", "File count (Least first)")
-          .addOption("none", "No sorting")
-          .setValue(this.workingView.sortMode || "alpha-asc")
+          .addOption("none", "Unsorted")
+          .setValue(this.workingView.defaultNodeSortMode || "alpha-asc")
           .onChange((value) => {
-            this.workingView.sortMode = value as SortMode;
+            this.workingView.defaultNodeSortMode = value as SortMode;
+          });
+      });
+
+    // Default file sort mode
+    new Setting(containerEl)
+      .setName("Default file sort mode")
+      .setDesc("How to sort files within each group")
+      .addDropdown((dropdown) => {
+        dropdown
+          .addOption("alpha-asc", "Alphabetical (A-Z)")
+          .addOption("alpha-desc", "Alphabetical (Z-A)")
+          .addOption("created-desc", "Created (Newest first)")
+          .addOption("created-asc", "Created (Oldest first)")
+          .addOption("modified-desc", "Modified (Newest first)")
+          .addOption("modified-asc", "Modified (Oldest first)")
+          .addOption("size-desc", "Size (Largest first)")
+          .addOption("size-asc", "Size (Smallest first)")
+          .addOption("none", "Unsorted")
+          .setValue(this.workingView.defaultFileSortMode || "alpha-asc")
+          .onChange((value) => {
+            this.workingView.defaultFileSortMode = value as FileSortMode;
           });
       });
 
@@ -425,6 +452,54 @@ class ViewEditorModal extends Modal {
             this.workingView.showPartialMatches = value;
           })
       );
+
+    // Level colors section
+    containerEl.createEl("h3", { text: "Hierarchy Level Colors" });
+
+    // Enable level colors
+    // Color mode dropdown (replaces enable toggle + mode dropdown)
+    new Setting(containerEl)
+      .setName("Level color mode")
+      .setDesc("How to apply hierarchy level colors (or none to disable)")
+      .addDropdown((dropdown) =>
+        dropdown
+          .addOption("none", "None (disabled)")
+          .addOption("background", "Background")
+          .addOption("border", "Left border")
+          .addOption("icon", "Icon color")
+          .setValue(this.workingView.levelColorMode || "none")
+          .onChange((value) => {
+            this.workingView.levelColorMode = value as LevelColorMode;
+            this.renderEditor(this.contentEl); // Re-render to show/hide color options
+          })
+      );
+
+    // File color (only show if colors are enabled)
+    if (this.workingView.levelColorMode && this.workingView.levelColorMode !== "none") {
+      new Setting(containerEl)
+        .setName("File color (optional)")
+        .setDesc("Custom color for file nodes (no color by default)")
+        .addColorPicker((color) =>
+          color
+            .setValue(this.workingView.fileColor || "#ffffff")
+            .onChange((value) => {
+              // Don't save white as the default - only save if user explicitly chose a color
+              // (white is just the picker's default display value)
+              if (this.workingView.fileColor || value.toLowerCase() !== "#ffffff") {
+                this.workingView.fileColor = value;
+              }
+            })
+        )
+        .addExtraButton((button) =>
+          button
+            .setIcon("reset")
+            .setTooltip("Clear color")
+            .onClick(() => {
+              this.workingView.fileColor = undefined;
+              this.renderEditor(this.contentEl);
+            })
+        );
+    }
 
     // Hierarchy levels section
     containerEl.createEl("h3", { text: "Hierarchy Levels" });
@@ -633,6 +708,53 @@ class ViewEditorModal extends Modal {
               level.label = value.trim() || undefined;
             })
         );
+
+      // Sort override
+      new Setting(levelContainer)
+        .setName("Sort override (optional)")
+        .setDesc("Override the default node sort mode for this specific level")
+        .addDropdown((dropdown) => {
+          dropdown
+            .addOption("", "Use default")
+            .addOption("alpha-asc", "Alphabetical (A-Z)")
+            .addOption("alpha-desc", "Alphabetical (Z-A)")
+            .addOption("count-desc", "File count (Most first)")
+            .addOption("count-asc", "File count (Least first)")
+            .addOption("none", "Unsorted")
+            .setValue(level.sortBy || "")
+            .onChange((value) => {
+              level.sortBy = value ? (value as SortMode) : undefined;
+            });
+        });
+
+      // Level color (only show if level colors are enabled for this view)
+      if (this.workingView.levelColorMode && this.workingView.levelColorMode !== "none") {
+        const defaultColor = DEFAULT_LEVEL_COLORS[index % DEFAULT_LEVEL_COLORS.length];
+        new Setting(levelContainer)
+          .setName("Level color (optional)")
+          .setDesc(`Custom color for level ${index + 1} (default: ${defaultColor})`)
+          .addColorPicker((color) =>
+            color
+              .setValue(level.color || defaultColor)
+              .onChange((value) => {
+                // Only save if different from default (normalize for comparison)
+                if (value.toLowerCase() !== defaultColor.toLowerCase()) {
+                  level.color = value;
+                } else {
+                  level.color = undefined;
+                }
+              })
+          )
+          .addExtraButton((button) =>
+            button
+              .setIcon("reset")
+              .setTooltip("Use default color")
+              .onClick(() => {
+                level.color = undefined;
+                this.renderEditor(this.contentEl);
+              })
+          );
+      }
     });
 
     // Add level button

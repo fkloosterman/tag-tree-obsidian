@@ -6,7 +6,7 @@ import {
   createFileNode,
   createPropertyGroupNode,
 } from "../types/tree-node";
-import { SortMode } from "../types/view-state";
+import { SortMode, FileSortMode, ViewState } from "../types/view-state";
 import {
   HierarchyConfig,
   HierarchyLevel,
@@ -31,9 +31,16 @@ export class TreeBuilder {
    *
    * @param rootTag - Optional root tag to filter by (e.g., "project" will show only tags under #project)
    * @param sortMode - Sort mode to apply to tree nodes (default: "alpha-asc")
+   * @param config - Optional hierarchy config for accessing default file sort mode
+   * @param viewState - Optional view state for runtime file sort override
    * @returns Root tree node with hierarchical structure
    */
-  buildFromTags(rootTag?: string, sortMode: SortMode = "alpha-asc"): TreeNode {
+  buildFromTags(
+    rootTag?: string,
+    sortMode: SortMode = "alpha-asc",
+    config?: HierarchyConfig,
+    viewState?: ViewState
+  ): TreeNode {
     // Get all tags (filtered by root if specified)
     const allTags = rootTag
       ? this.indexer.getNestedTagsUnder(rootTag)
@@ -73,6 +80,7 @@ export class TreeBuilder {
       // Create the tag node (without files yet)
       const node = createTagNode(tag, [], depth, {
         parentId: parent?.id,
+        levelIndex: 0, // All tags in buildFromTags are at hierarchy level 0
       });
       nodeMap.set(tag, node);
 
@@ -85,11 +93,18 @@ export class TreeBuilder {
     // Add file nodes to leaf tag nodes
     this.addFileNodes(nodeMap);
 
-    // Sort all children according to sort mode
-    this.sortTreeRecursive(root, sortMode);
-
-    // Calculate aggregate file counts
+    // Calculate aggregate file counts BEFORE sorting
+    // (needed for count-based sorting to work correctly)
     this.calculateFileCounts(root);
+
+    // Sort all children - use new sorting if config provided, otherwise legacy
+    if (config && viewState !== undefined) {
+      // Use new sorting that separates file and node sorting
+      this.sortTreeRecursiveNew(root, config, viewState, 0);
+    } else {
+      // Legacy path - use old sorting (for backward compatibility)
+      this.sortTreeRecursive(root, sortMode);
+    }
 
     return root;
   }
@@ -168,6 +183,7 @@ export class TreeBuilder {
 
   /**
    * Sort tree nodes according to sort mode (recursive)
+   * LEGACY METHOD - kept for buildFromTags compatibility
    *
    * @param node - Node whose children should be sorted
    * @param sortMode - Sort mode to apply
@@ -248,20 +264,262 @@ export class TreeBuilder {
   }
 
   /**
+   * Sort tree with per-level and file-specific sorting (NEW)
+   *
+   * @param node - Node whose children should be sorted
+   * @param config - Hierarchy configuration
+   * @param viewState - Optional view state for runtime overrides
+   * @param currentLevelIndex - Current hierarchy level index
+   */
+  private sortTreeRecursiveNew(
+    node: TreeNode,
+    config: HierarchyConfig,
+    viewState?: ViewState,
+    currentLevelIndex: number = 0
+  ): void {
+    if (node.children.length === 0) {
+      return;
+    }
+
+    // Separate files from tag/property nodes
+    const fileNodes: TreeNode[] = [];
+    const tagPropertyNodes: TreeNode[] = [];
+
+    for (const child of node.children) {
+      if (child.type === "file") {
+        fileNodes.push(child);
+      } else {
+        tagPropertyNodes.push(child);
+        // Ensure levelIndex is set in metadata (should be set during tree building)
+        // If not set, fall back to currentLevelIndex for backwards compatibility
+        if (!child.metadata) {
+          child.metadata = {};
+        }
+        if (child.metadata.levelIndex === undefined) {
+          child.metadata.levelIndex = currentLevelIndex;
+        }
+      }
+    }
+
+    // Sort file nodes using file sort mode
+    const fileSortMode = viewState?.fileSortMode ??
+                         config.defaultFileSortMode ??
+                         "alpha-asc";
+    this.sortFiles(fileNodes, fileSortMode);
+
+    // Sort tag/property nodes using level-specific or default sort mode
+    // Use the CHILDREN's level index, not the parent's level index
+    const childrenLevelIndex = tagPropertyNodes.length > 0
+      ? (tagPropertyNodes[0].metadata?.levelIndex ?? currentLevelIndex)
+      : currentLevelIndex;
+    const nodeSortMode = this.getNodeSortMode(
+      childrenLevelIndex,
+      config,
+      viewState
+    );
+    this.sortNodes(tagPropertyNodes, nodeSortMode);
+
+    // Recombine: files first, then nodes (maintains current behavior)
+    node.children = [...fileNodes, ...tagPropertyNodes];
+
+    // Recursively sort children of tag/property nodes
+    for (const child of tagPropertyNodes) {
+      // Read the child's levelIndex from metadata (set during tree building)
+      // This is more reliable than trying to compute it
+      const childLevelIndex = child.metadata?.levelIndex ?? currentLevelIndex;
+      this.sortTreeRecursiveNew(child, config, viewState, childLevelIndex);
+    }
+  }
+
+  /**
+   * Determine the hierarchy level index for a child node
+   *
+   * @param node - The node to check
+   * @param currentLevelIndex - Current level index
+   * @param config - Hierarchy configuration
+   * @returns Next level index
+   */
+  private getNextLevelIndex(
+    node: TreeNode,
+    currentLevelIndex: number,
+    config: HierarchyConfig
+  ): number {
+    // If we're beyond the hierarchy levels, stay at current
+    if (currentLevelIndex >= config.levels.length) {
+      return currentLevelIndex;
+    }
+
+    const currentLevel = config.levels[currentLevelIndex];
+
+    // For tag levels with unlimited depth (-1) or depth > 1,
+    // all nested tags are part of the same hierarchy level
+    if (currentLevel.type === "tag") {
+      const tagLevel = currentLevel as TagHierarchyLevel;
+      const tagDepth = tagLevel.depth || 1;
+
+      if (tagDepth === -1 || tagDepth > 1) {
+        // Stay at the same hierarchy level index
+        // All nested tags are part of this one configuration level
+        return currentLevelIndex;
+      }
+    }
+
+    // For single-depth levels, increment to next hierarchy level
+    return currentLevelIndex + 1;
+  }
+
+  /**
+   * Get the sort mode for a specific hierarchy level
+   *
+   * @param levelIndex - Index of the hierarchy level
+   * @param config - Hierarchy configuration
+   * @param viewState - Optional view state for runtime overrides
+   * @returns Sort mode to use
+   */
+  private getNodeSortMode(
+    levelIndex: number,
+    config: HierarchyConfig,
+    viewState?: ViewState
+  ): SortMode {
+    // 1. Check ViewState runtime override (NOT USED - per user's decision)
+    // We decided level sorting changes via context menu go to config, not viewState
+
+    // 2. Check hierarchy level config
+    if (levelIndex < config.levels.length && config.levels[levelIndex]?.sortBy) {
+      return config.levels[levelIndex].sortBy!;
+    }
+
+    // 3. Fall back to view default
+    return config.defaultNodeSortMode ?? "alpha-asc";
+  }
+
+  /**
+   * Sort file nodes according to file sort mode
+   *
+   * @param files - Array of file nodes to sort (modified in place)
+   * @param mode - File sort mode
+   */
+  private sortFiles(files: TreeNode[], mode: FileSortMode): void {
+    if (mode === "none" || files.length === 0) {
+      return;
+    }
+
+    files.sort((a, b) => {
+      const fileA = a.files[0]; // File nodes always have exactly 1 file
+      const fileB = b.files[0];
+
+      switch (mode) {
+        case "alpha-asc":
+          return a.name.localeCompare(b.name, undefined, {
+            numeric: true,
+            sensitivity: "base",
+          });
+
+        case "alpha-desc":
+          return b.name.localeCompare(a.name, undefined, {
+            numeric: true,
+            sensitivity: "base",
+          });
+
+        case "created-asc":
+          return fileA.stat.ctime - fileB.stat.ctime;
+
+        case "created-desc":
+          return fileB.stat.ctime - fileA.stat.ctime;
+
+        case "modified-asc":
+          return fileA.stat.mtime - fileB.stat.mtime;
+
+        case "modified-desc":
+          return fileB.stat.mtime - fileA.stat.mtime;
+
+        case "size-asc":
+          return fileA.stat.size - fileB.stat.size;
+
+        case "size-desc":
+          return fileB.stat.size - fileA.stat.size;
+
+        default:
+          return 0;
+      }
+    });
+  }
+
+  /**
+   * Sort tag/property nodes according to sort mode
+   *
+   * @param nodes - Array of tag/property nodes to sort (modified in place)
+   * @param mode - Sort mode
+   */
+  private sortNodes(nodes: TreeNode[], mode: SortMode): void {
+    if (mode === "none" || nodes.length === 0) {
+      return;
+    }
+
+    nodes.sort((a, b) => {
+      switch (mode) {
+        case "alpha-asc":
+          return a.name.localeCompare(b.name, undefined, {
+            numeric: true,
+            sensitivity: "base",
+          });
+
+        case "alpha-desc":
+          return b.name.localeCompare(a.name, undefined, {
+            numeric: true,
+            sensitivity: "base",
+          });
+
+        case "count-desc":
+          // More files first
+          if (a.fileCount !== b.fileCount) {
+            return b.fileCount - a.fileCount;
+          }
+          // Tie-breaker: alphabetical
+          return a.name.localeCompare(b.name, undefined, {
+            numeric: true,
+            sensitivity: "base",
+          });
+
+        case "count-asc":
+          // Fewer files first
+          if (a.fileCount !== b.fileCount) {
+            return a.fileCount - b.fileCount;
+          }
+          // Tie-breaker: alphabetical
+          return a.name.localeCompare(b.name, undefined, {
+            numeric: true,
+            sensitivity: "base",
+          });
+
+        default:
+          // Default to alphabetical
+          return a.name.localeCompare(b.name, undefined, {
+            numeric: true,
+            sensitivity: "base",
+          });
+      }
+    });
+  }
+
+  /**
    * Build a tree from a hierarchy configuration
    * Supports multi-level grouping by tags and properties
    *
    * @param config - Hierarchy configuration defining the tree structure
+   * @param viewState - Optional view state for runtime sort overrides
    * @returns Root tree node with hierarchical structure
    */
-  buildFromHierarchy(config: HierarchyConfig): TreeNode {
+  buildFromHierarchy(config: HierarchyConfig, viewState?: ViewState): TreeNode {
     // Optimization: For simple single-level tag hierarchies with unlimited depth,
     // use buildFromTags which is more efficient for full nested hierarchies
     if (this.shouldUseBuildFromTags(config)) {
       const tagLevel = config.levels[0] as TagHierarchyLevel;
       return this.buildFromTags(
         config.rootTag?.replace(/^#/, ""),
-        config.sortMode || "alpha-asc"
+        config.defaultNodeSortMode || "alpha-asc",
+        config,
+        viewState
       );
     }
 
@@ -292,12 +550,12 @@ export class TreeBuilder {
       config.showPartialMatches
     );
 
-    // Apply sorting according to config
-    const sortMode = config.sortMode || "alpha-asc";
-    this.sortTreeRecursive(root, sortMode);
-
-    // Calculate aggregate file counts
+    // Calculate aggregate file counts BEFORE sorting
+    // (needed for count-based sorting to work correctly)
     this.calculateFileCounts(root);
+
+    // Apply sorting with per-level and file-specific logic
+    this.sortTreeRecursiveNew(root, config, viewState, 0);
 
     return root;
   }
@@ -359,13 +617,16 @@ export class TreeBuilder {
   ): TreeNode {
     // Base case: no more levels or no files
     if (depth >= levels.length || files.length === 0) {
-      const fileNodes = files.map((f) => createFileNode(f, depth, parentId));
+      // Tree depth is hierarchy level index + 1 (root is depth 0)
+      // When we've exhausted all levels, depth is the next level index,
+      // so file nodes should be at depth + 1
+      const fileNodes = files.map((f) => createFileNode(f, depth + 1, parentId));
       return {
         id: parentId || "root",
         name: "Root",
         type: "tag",
         children: fileNodes,
-        depth,
+        depth: 0, // This wrapper node is returned as the root
         files: [],
         fileCount: files.length,
       };
@@ -397,25 +658,38 @@ export class TreeBuilder {
     // Single-depth grouping (original logic)
     const groups = this.groupFilesByLevel(files, level, parentTagPath);
 
+    // Track which files were successfully grouped
+    const groupedFiles = new Set<TFile>();
+    for (const groupFiles of groups.values()) {
+      groupFiles.forEach(f => groupedFiles.add(f));
+    }
+
+    // Find files that didn't match this level (weren't grouped)
+    const unmatchedFiles = files.filter(f => !groupedFiles.has(f));
+
     // Create nodes for each group
     const children: TreeNode[] = [];
+    // Tree depth is hierarchy level index + 1 (root is depth 0)
+    const treeDepth = depth + 1;
 
     for (const [groupKey, groupFiles] of groups.entries()) {
       // Create the group node
       let node: TreeNode;
       if (level.type === "tag") {
         const tagLevel = level as TagHierarchyLevel;
-        node = createTagNode(groupKey, [], depth, {
+        node = createTagNode(groupKey, [], treeDepth, {
           label: tagLevel.label,
           showFullPath: tagLevel.showFullPath,
           parentId,
+          levelIndex: depth, // Set hierarchy level index
         });
       } else {
         const propLevel = level as PropertyHierarchyLevel;
-        node = createPropertyGroupNode(level.key, groupKey, [], depth, {
+        node = createPropertyGroupNode(level.key, groupKey, [], treeDepth, {
           label: propLevel.label,
           showPropertyName: propLevel.showPropertyName,
           parentId,
+          levelIndex: depth, // Set hierarchy level index
         });
       }
 
@@ -445,7 +719,7 @@ export class TreeBuilder {
       // Only add if showPartialMatches=true OR this is the last hierarchy level
       if (showPartialMatches || depth + 1 >= levels.length) {
         for (const file of filesForThisLevel) {
-          const fileNode = createFileNode(file, depth + 1, node.id);
+          const fileNode = createFileNode(file, treeDepth + 1, node.id);
           fileNode.parent = node;
           node.children.push(fileNode);
         }
@@ -476,12 +750,23 @@ export class TreeBuilder {
       children.push(node);
     }
 
+    // Add unmatched files as partial matches if enabled
+    // These are files that matched previous levels but don't match this level
+    // Only show if depth > 0 (they've matched at least one previous level)
+    if (showPartialMatches && unmatchedFiles.length > 0 && depth > 0) {
+      // Add them as file nodes directly to the children
+      for (const file of unmatchedFiles) {
+        const fileNode = createFileNode(file, treeDepth, parentId);
+        children.push(fileNode);
+      }
+    }
+
     return {
       id: "root",
       name: "Root",
       type: "tag",
       children,
-      depth,
+      depth: 0, // Root wrapper is always depth 0
       files: [],
       fileCount: 0,
     };
@@ -511,7 +796,8 @@ export class TreeBuilder {
     parentId?: string
   ): TreeNode {
     const tagDepth = tagLevel.depth || 1;
-    const treeDepth = hierarchyDepth;
+    // Tree depth is hierarchy level index + 1 (root is depth 0)
+    const treeDepth = hierarchyDepth + 1;
 
     // Group files by tags at current sub-depth (1 level at a time)
     const groups = new Map<string, TFile[]>();
@@ -558,6 +844,7 @@ export class TreeBuilder {
         label: tagLevel.label,
         showFullPath: tagLevel.showFullPath,
         parentId,
+        levelIndex: hierarchyDepth, // Set hierarchy level index (not treeDepth!)
       });
 
       // Check if there are more sub-depths to process
@@ -775,6 +1062,7 @@ export class TreeBuilder {
             label: tagLvl.label,
             showFullPath: tagLvl.showFullPath,
             parentId,
+            levelIndex: hierarchyDepth + 1, // Set hierarchy level index
           });
         } else {
           const propLvl = nextLevel as PropertyHierarchyLevel;
@@ -787,6 +1075,7 @@ export class TreeBuilder {
               label: propLvl.label,
               showPropertyName: propLvl.showPropertyName,
               parentId,
+              levelIndex: hierarchyDepth + 1, // Set hierarchy level index
             }
           );
         }

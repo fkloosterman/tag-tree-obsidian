@@ -38,6 +38,9 @@ export interface TreeNode {
 
     /** Property value for property nodes */
     propertyValue?: any;
+
+    /** Index of the hierarchy level this node belongs to */
+    levelIndex?: number;
   };
 
   /** UI state (managed by TreeComponent) */
@@ -55,6 +58,7 @@ export function createTagNode(
     label?: string;
     showFullPath?: boolean;
     parentId?: string;
+    levelIndex?: number;
   }
 ): TreeNode {
   const segments = tagPath.split("/");
@@ -89,7 +93,10 @@ export function createTagNode(
     depth,
     files,
     fileCount: files.length,
-    metadata: { tagPath },
+    metadata: {
+      tagPath,
+      levelIndex: options?.levelIndex,
+    },
   };
 }
 
@@ -105,6 +112,7 @@ export function createPropertyGroupNode(
     label?: string;
     showPropertyName?: boolean;
     parentId?: string;
+    levelIndex?: number;
   }
 ): TreeNode {
   let name: string;
@@ -134,7 +142,11 @@ export function createPropertyGroupNode(
     depth,
     files,
     fileCount: files.length,
-    metadata: { propertyKey, propertyValue },
+    metadata: {
+      propertyKey,
+      propertyValue,
+      levelIndex: options?.levelIndex,
+    },
   };
 }
 
