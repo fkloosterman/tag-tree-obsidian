@@ -589,16 +589,15 @@ class ViewEditorModal extends Modal {
    */
   private getLevelTitle(level: HierarchyLevel, index: number): string {
     const levelNum = index + 1;
-    const typeLabel = level.type === "tag" ? "Tag" : "Property";
-    const key = level.key || "(empty)";
-    const label = level.label ? ` "${level.label}"` : "";
 
     if (level.type === "tag") {
       const tagLevel = level as TagHierarchyLevel;
+      const key = level.key || "(empty)";
       const depth = tagLevel.depth === -1 ? "full hierarchy" : `depth ${tagLevel.depth}`;
-      return `Level ${levelNum}: ${typeLabel} - ${key}${label} (${depth})`;
+      return `Level ${levelNum}: #${key} tag (${depth})`;
     } else {
-      return `Level ${levelNum}: ${typeLabel} - ${key}${label}`;
+      const key = level.key || "(empty)";
+      return `Level ${levelNum}: ${key} property`;
     }
   }
 
