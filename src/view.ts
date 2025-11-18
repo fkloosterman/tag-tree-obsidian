@@ -92,7 +92,7 @@ export class TagTreeView extends ItemView {
       // Remove loading indicator
       loadingEl.remove();
 
-      // Create tree component with search callback
+      // Create tree component with callbacks
       this.treeComponent = new TreeComponent(
         this.app,
         () => {
@@ -100,6 +100,9 @@ export class TagTreeView extends ItemView {
         },
         (node: TreeNode) => {
           this.handleNodeSearch(node);
+        },
+        (node: TreeNode, mode: SortMode) => {
+          this.handleNodeSortChange(node, mode);
         }
       );
 
@@ -207,6 +210,56 @@ export class TagTreeView extends ItemView {
 
     // Save state
     this.saveViewState();
+  }
+
+  /**
+   * Handle node sort mode change from context menu
+   */
+  private handleNodeSortChange(node: TreeNode, mode: SortMode): void {
+    if (!this.treeBuilder || !this.treeComponent) {
+      return;
+    }
+
+    // Get the level index from node metadata
+    const levelIndex = node.metadata?.levelIndex;
+    if (levelIndex === undefined) {
+      console.warn("[TagTree] Cannot change sort mode: node has no levelIndex", node);
+      return;
+    }
+
+    // Get the current view configuration
+    const viewConfig = this.plugin.settings.savedViews.find(
+      (v) => v.name === this.currentViewName
+    );
+
+    if (!viewConfig) {
+      console.error(
+        `[TagTree] Cannot change sort mode: view "${this.currentViewName}" not found`
+      );
+      return;
+    }
+
+    // Check if level exists
+    if (levelIndex >= viewConfig.levels.length) {
+      console.warn(
+        `[TagTree] Cannot change sort mode: level ${levelIndex} does not exist in view config`
+      );
+      return;
+    }
+
+    // Update the hierarchy level's sortBy property
+    viewConfig.levels[levelIndex].sortBy = mode;
+
+    // Save settings
+    this.plugin.saveSettings();
+
+    // Rebuild and re-render tree with new sort mode
+    const container = this.containerEl.querySelector(
+      ".tag-tree-content"
+    ) as HTMLElement;
+    if (container) {
+      this.buildAndRenderTree(container);
+    }
   }
 
   /**
