@@ -636,8 +636,13 @@
   filter: brightness(0.95);
 }
 
-/* File color in background mode */
+/* Files should NOT get level colors - only custom file color */
 .tag-tree-content[data-level-color-mode="background"] .tree-node[data-node-type="file"] .tree-node-header {
+  background-color: transparent;
+}
+
+/* File color in background mode (only when explicitly set) */
+.tag-tree-content[data-level-color-mode="background"][data-has-file-color] .tree-node[data-node-type="file"] .tree-node-header {
   background-color: var(--file-color);
 }
 
@@ -671,8 +676,13 @@
   padding-left: 5px;
 }
 
-/* File color in border mode */
+/* Files should NOT get level colors - only custom file color */
 .tag-tree-content[data-level-color-mode="border"] .tree-node[data-node-type="file"] .tree-node-header {
+  border-left: none;
+}
+
+/* File color in border mode (only when explicitly set) */
+.tag-tree-content[data-level-color-mode="border"][data-has-file-color] .tree-node[data-node-type="file"] .tree-node-header {
   border-left: 3px solid var(--file-color);
   padding-left: 5px;
 }
@@ -700,8 +710,13 @@
   color: var(--level-6-color);
 }
 
-/* File color in icon mode */
+/* Files should NOT get level colors - keep default icon color */
 .tag-tree-content[data-level-color-mode="icon"] .tree-node[data-node-type="file"] .tree-node-icon {
+  color: inherit;
+}
+
+/* File color in icon mode (only when explicitly set) */
+.tag-tree-content[data-level-color-mode="icon"][data-has-file-color] .tree-node[data-node-type="file"] .tree-node-icon {
   color: var(--file-color);
 }
 

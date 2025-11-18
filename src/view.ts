@@ -333,6 +333,13 @@ export class TagTreeView extends ItemView {
       container.removeAttribute("data-level-color-mode");
     }
 
+    // Set data attribute if file color is configured
+    if (viewConfig.fileColor) {
+      container.setAttribute("data-has-file-color", "true");
+    } else {
+      container.removeAttribute("data-has-file-color");
+    }
+
     // Apply custom colors as CSS variables
     if (viewConfig.enableLevelColors) {
       // Default colors (hex format for compatibility)
