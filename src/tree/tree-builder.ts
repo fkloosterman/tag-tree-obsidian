@@ -308,8 +308,12 @@ export class TreeBuilder {
     this.sortFiles(fileNodes, fileSortMode);
 
     // Sort tag/property nodes using level-specific or default sort mode
+    // Use the CHILDREN's level index, not the parent's level index
+    const childrenLevelIndex = tagPropertyNodes.length > 0
+      ? (tagPropertyNodes[0].metadata?.levelIndex ?? currentLevelIndex)
+      : currentLevelIndex;
     const nodeSortMode = this.getNodeSortMode(
-      currentLevelIndex,
+      childrenLevelIndex,
       config,
       viewState
     );
