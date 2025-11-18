@@ -92,6 +92,10 @@ export class TreeBuilder {
     // Add file nodes to leaf tag nodes
     this.addFileNodes(nodeMap);
 
+    // Calculate aggregate file counts BEFORE sorting
+    // (needed for count-based sorting to work correctly)
+    this.calculateFileCounts(root);
+
     // Sort all children - use new sorting if config provided, otherwise legacy
     if (config && viewState !== undefined) {
       // Use new sorting that separates file and node sorting
@@ -100,9 +104,6 @@ export class TreeBuilder {
       // Legacy path - use old sorting (for backward compatibility)
       this.sortTreeRecursive(root, sortMode);
     }
-
-    // Calculate aggregate file counts
-    this.calculateFileCounts(root);
 
     return root;
   }
@@ -341,8 +342,22 @@ export class TreeBuilder {
       return currentLevelIndex;
     }
 
-    // For now, simply increment (tag depth handling is complex)
-    // TODO: Improve this to handle tag levels with depth > 1 or -1
+    const currentLevel = config.levels[currentLevelIndex];
+
+    // For tag levels with unlimited depth (-1) or depth > 1,
+    // all nested tags are part of the same hierarchy level
+    if (currentLevel.type === "tag") {
+      const tagLevel = currentLevel as TagHierarchyLevel;
+      const tagDepth = tagLevel.depth || 1;
+
+      if (tagDepth === -1 || tagDepth > 1) {
+        // Stay at the same hierarchy level index
+        // All nested tags are part of this one configuration level
+        return currentLevelIndex;
+      }
+    }
+
+    // For single-depth levels, increment to next hierarchy level
     return currentLevelIndex + 1;
   }
 
@@ -528,11 +543,12 @@ export class TreeBuilder {
       config.showPartialMatches
     );
 
+    // Calculate aggregate file counts BEFORE sorting
+    // (needed for count-based sorting to work correctly)
+    this.calculateFileCounts(root);
+
     // Apply sorting with per-level and file-specific logic
     this.sortTreeRecursiveNew(root, config, viewState, 0);
-
-    // Calculate aggregate file counts
-    this.calculateFileCounts(root);
 
     return root;
   }
