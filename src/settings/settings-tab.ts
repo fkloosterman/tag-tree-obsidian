@@ -5,6 +5,7 @@ import {
   HierarchyLevel,
   TagHierarchyLevel,
   PropertyHierarchyLevel,
+  LevelColorMode,
   validateHierarchyConfig,
   createHierarchyConfig,
   createHierarchyLevel,
@@ -12,7 +13,7 @@ import {
   createPropertyLevel,
 } from "../types/hierarchy-config";
 import { SortMode, FileSortMode } from "../types/view-state";
-import { LevelColorMode } from "./plugin-settings";
+import { DEFAULT_LEVEL_COLORS } from "./plugin-settings";
 
 /**
  * Settings tab for Tag Tree plugin
@@ -34,9 +35,6 @@ export class TagTreeSettingsTab extends PluginSettingTab {
 
     // Default view selector
     this.renderDefaultViewSelector(containerEl);
-
-    // Level colors section
-    this.renderLevelColorsSettings(containerEl);
 
     // Saved views list
     this.renderSavedViewsList(containerEl);
@@ -65,43 +63,6 @@ export class TagTreeSettingsTab extends PluginSettingTab {
             await this.plugin.saveSettings();
           });
       });
-  }
-
-  /**
-   * Render level colors settings
-   */
-  private renderLevelColorsSettings(containerEl: HTMLElement): void {
-    containerEl.createEl("h3", { text: "Hierarchy Level Colors" });
-
-    new Setting(containerEl)
-      .setName("Enable level colors")
-      .setDesc("Color-code nodes by their hierarchy level")
-      .addToggle((toggle) =>
-        toggle
-          .setValue(this.plugin.settings.enableLevelColors)
-          .onChange(async (value) => {
-            this.plugin.settings.enableLevelColors = value;
-            await this.plugin.saveSettings();
-            this.plugin.refreshAllViews();
-          })
-      );
-
-    new Setting(containerEl)
-      .setName("Color mode")
-      .setDesc("How to apply hierarchy level colors")
-      .addDropdown((dropdown) =>
-        dropdown
-          .addOption("none", "None")
-          .addOption("background", "Background")
-          .addOption("border", "Left border")
-          .addOption("icon", "Icon color")
-          .setValue(this.plugin.settings.levelColorMode)
-          .onChange(async (value) => {
-            this.plugin.settings.levelColorMode = value as LevelColorMode;
-            await this.plugin.saveSettings();
-            this.plugin.refreshAllViews();
-          })
-      );
   }
 
   /**
@@ -488,6 +449,53 @@ class ViewEditorModal extends Modal {
           })
       );
 
+    // Level colors section
+    containerEl.createEl("h3", { text: "Hierarchy Level Colors" });
+
+    // Enable level colors
+    new Setting(containerEl)
+      .setName("Enable level colors")
+      .setDesc("Color-code nodes by their hierarchy level")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.workingView.enableLevelColors ?? false)
+          .onChange((value) => {
+            this.workingView.enableLevelColors = value;
+            this.renderEditor(this.contentEl); // Re-render to show/hide color options
+          })
+      );
+
+    // Color mode (only show if enabled)
+    if (this.workingView.enableLevelColors) {
+      new Setting(containerEl)
+        .setName("Color mode")
+        .setDesc("How to apply hierarchy level colors")
+        .addDropdown((dropdown) =>
+          dropdown
+            .addOption("none", "None")
+            .addOption("background", "Background")
+            .addOption("border", "Left border")
+            .addOption("icon", "Icon color")
+            .setValue(this.workingView.levelColorMode || "background")
+            .onChange((value) => {
+              this.workingView.levelColorMode = value as LevelColorMode;
+            })
+        );
+
+      // File color
+      new Setting(containerEl)
+        .setName("File color (optional)")
+        .setDesc("Custom color for file nodes (leave empty for no color)")
+        .addText((text) =>
+          text
+            .setPlaceholder("e.g., hsl(0, 0%, 90%)")
+            .setValue(this.workingView.fileColor || "")
+            .onChange((value) => {
+              this.workingView.fileColor = value.trim() || undefined;
+            })
+        );
+    }
+
     // Hierarchy levels section
     containerEl.createEl("h3", { text: "Hierarchy Levels" });
     containerEl.createEl("p", {
@@ -713,6 +721,21 @@ class ViewEditorModal extends Modal {
               level.sortBy = value ? (value as SortMode) : undefined;
             });
         });
+
+      // Level color (only show if level colors are enabled for this view)
+      if (this.workingView.enableLevelColors) {
+        new Setting(levelContainer)
+          .setName("Level color (optional)")
+          .setDesc(`Custom color for level ${index + 1} (leave empty for default palette color)`)
+          .addText((text) =>
+            text
+              .setPlaceholder(DEFAULT_LEVEL_COLORS[index % DEFAULT_LEVEL_COLORS.length])
+              .setValue(level.color || "")
+              .onChange((value) => {
+                level.color = value.trim() || undefined;
+              })
+          );
+      }
     });
 
     // Add level button

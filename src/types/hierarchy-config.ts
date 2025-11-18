@@ -1,6 +1,11 @@
 import { SortMode, FileSortMode } from "./view-state";
 
 /**
+ * Level color modes for visual hierarchy differentiation
+ */
+export type LevelColorMode = "none" | "background" | "border" | "icon";
+
+/**
  * Base hierarchy level interface
  */
 interface BaseHierarchyLevel {
@@ -9,6 +14,9 @@ interface BaseHierarchyLevel {
 
   /** Optional sort mode for this level (defaults to parent config's sort mode) */
   sortBy?: SortMode;
+
+  /** Optional custom color for this level (CSS color value) */
+  color?: string;
 }
 
 /**
@@ -85,6 +93,15 @@ export interface HierarchyConfig {
 
   /** Default sort mode for file nodes */
   defaultFileSortMode?: FileSortMode;
+
+  /** Enable hierarchy level coloring for this view */
+  enableLevelColors?: boolean;
+
+  /** How to apply level colors (background, border, icon, or none) */
+  levelColorMode?: LevelColorMode;
+
+  /** Optional custom color for file nodes (CSS color value) */
+  fileColor?: string;
 }
 
 /**

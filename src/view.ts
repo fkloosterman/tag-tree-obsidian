@@ -326,6 +326,31 @@ export class TagTreeView extends ItemView {
       return;
     }
 
+    // Apply level color mode to the tree container
+    if (viewConfig.enableLevelColors && viewConfig.levelColorMode && viewConfig.levelColorMode !== "none") {
+      container.setAttribute("data-level-color-mode", viewConfig.levelColorMode);
+    } else {
+      container.removeAttribute("data-level-color-mode");
+    }
+
+    // Apply custom colors as CSS variables
+    if (viewConfig.enableLevelColors) {
+      viewConfig.levels.forEach((level, index) => {
+        if (level.color) {
+          container.style.setProperty(`--level-${index}-color`, level.color);
+        }
+      });
+      if (viewConfig.fileColor) {
+        container.style.setProperty('--file-color', viewConfig.fileColor);
+      }
+    } else {
+      // Clear CSS variables if colors are disabled
+      viewConfig.levels.forEach((level, index) => {
+        container.style.removeProperty(`--level-${index}-color`);
+      });
+      container.style.removeProperty('--file-color');
+    }
+
     // Build tree from hierarchy configuration
     // TreeBuilder will internally optimize for simple tag hierarchies (depth=-1)
     const viewState = this.plugin.settings.viewStates[this.currentViewName];

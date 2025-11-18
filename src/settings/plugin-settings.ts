@@ -5,11 +5,6 @@ import {
 } from "../types/hierarchy-config";
 
 /**
- * Level color modes for visual hierarchy differentiation
- */
-export type LevelColorMode = "none" | "background" | "border" | "icon";
-
-/**
  * Plugin settings schema
  */
 export interface TagTreeSettings {
@@ -21,15 +16,6 @@ export interface TagTreeSettings {
 
   /** Per-view UI state storage (keyed by view name) */
   viewStates: Record<string, ViewState>;
-
-  /** Enable hierarchy level coloring */
-  enableLevelColors: boolean;
-
-  /** How to apply level colors */
-  levelColorMode: LevelColorMode;
-
-  /** Optional custom color palette (hex colors) */
-  customLevelColors?: string[];
 }
 
 /**
@@ -60,10 +46,6 @@ export const DEFAULT_SETTINGS: TagTreeSettings = {
     // Default view state for "All Tags"
     "All Tags": { ...DEFAULT_VIEW_STATE },
   },
-
-  // Level colors disabled by default
-  enableLevelColors: false,
-  levelColorMode: "background",
 };
 
 /**
@@ -112,11 +94,14 @@ export function migrateSettings(settings: TagTreeSettings): void {
     }
   });
 
-  // Set defaults for level colors if missing
-  if (settings.enableLevelColors === undefined) {
-    settings.enableLevelColors = false;
+  // Remove old global level color settings (now per-view)
+  if ('enableLevelColors' in settings) {
+    delete (settings as any).enableLevelColors;
   }
-  if (!settings.levelColorMode) {
-    settings.levelColorMode = "background";
+  if ('levelColorMode' in settings) {
+    delete (settings as any).levelColorMode;
+  }
+  if ('customLevelColors' in settings) {
+    delete (settings as any).customLevelColors;
   }
 }
