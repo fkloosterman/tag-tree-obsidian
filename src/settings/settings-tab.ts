@@ -1296,19 +1296,33 @@ class ViewEditorModal extends Modal {
     const metadata = FILTER_TYPE_METADATA[filter.type];
     setting.setName(metadata.name);
 
-    // NOT toggle
+    // NOT toggle with label
     setting.addToggle(toggle => {
+      const toggleContainer = toggle.toggleEl.parentElement!;
+
+      // Create NOT label
+      const notLabel = toggleContainer.createSpan({ cls: "tag-tree-filter-not-label" });
+
+      // Update toggle and label
+      const updateNotLabel = (value: boolean) => {
+        if (value) {
+          notLabel.setText(" NOT");
+          notLabel.style.display = "inline";
+        } else {
+          notLabel.style.display = "none";
+        }
+      };
+
       toggle
         .setValue(filter.negate || false)
         .setTooltip("Negate (NOT)")
         .onChange(value => {
           filter.negate = value;
+          updateNotLabel(value);
         });
-      // Add "NOT" label after checkbox
-      const toggleEl = toggle.toggleEl;
-      if (filter.negate) {
-        toggleEl.parentElement!.createSpan({ text: " NOT", cls: "tag-tree-filter-not-label" });
-      }
+
+      // Set initial state
+      updateNotLabel(filter.negate || false);
     });
 
     // Type-specific UI
@@ -1388,36 +1402,92 @@ class ViewEditorModal extends Modal {
   }
 
   private renderPropertyValueFilterUI(setting: Setting, filter: PropertyValueFilter): void {
+    // Property name input
     setting.addText(text => {
       text
         .setPlaceholder("Property name")
         .setValue(filter.property || "")
         .onChange(value => {
           filter.property = value;
+          // Re-render to update operators when property changes
+          this.renderEditor(this.contentEl);
         });
     });
 
+    // Detect property type and show appropriate operators
+    const propertyType = this.detectPropertyType(filter.property);
+    let operators = STRING_OPERATORS;
+
+    if (propertyType === "number") {
+      operators = NUMBER_OPERATORS;
+    } else if (propertyType === "date" || propertyType === "datetime") {
+      operators = DATE_OPERATORS;
+    } else if (propertyType === "checkbox") {
+      operators = BOOLEAN_OPERATORS;
+    } else if (propertyType === "tags" || propertyType === "aliases") {
+      operators = ARRAY_OPERATORS;
+    }
+
+    // Operator dropdown
     setting.addDropdown(dropdown => {
-      // Add operators based on property type
-      // For simplicity, show all string operators by default
-      STRING_OPERATORS.forEach(op => {
+      operators.forEach(op => {
         dropdown.addOption(op.operator, op.label);
       });
+
+      // Validate current operator against new operators list
+      const isValidOperator = operators.some(op => op.operator === filter.operator);
+      if (!isValidOperator && operators.length > 0) {
+        filter.operator = operators[0].operator as any;
+      }
+
       dropdown
-        .setValue(filter.operator || "equals")
+        .setValue(filter.operator || operators[0]?.operator || "equals")
         .onChange(value => {
           filter.operator = value as any;
         });
     });
 
-    setting.addText(text => {
-      text
-        .setPlaceholder("Value")
-        .setValue(String(filter.value || ""))
-        .onChange(value => {
-          filter.value = value;
+    // Value input (if operator needs a value)
+    const currentOp = operators.find(op => op.operator === filter.operator);
+    if (!currentOp || currentOp.needsValue) {
+      setting.addText(text => {
+        text
+          .setPlaceholder("Value")
+          .setValue(String(filter.value || ""))
+          .onChange(value => {
+            filter.value = value;
+          });
+      });
+
+      // For range operators, add max value input
+      if (currentOp?.needsValueMax) {
+        setting.addText(text => {
+          text
+            .setPlaceholder("Max value")
+            .setValue(String(filter.valueMax || ""))
+            .onChange(value => {
+              filter.valueMax = value;
+            });
         });
-    });
+      }
+    }
+  }
+
+  /**
+   * Detect property type from Obsidian's metadata type manager
+   */
+  private detectPropertyType(propertyName: string): string | null {
+    if (!propertyName || propertyName.trim() === "") {
+      return null;
+    }
+
+    const metadataTypeManager = (this.app as any).metadataTypeManager;
+    if (!metadataTypeManager) {
+      return null;
+    }
+
+    const propertyInfo = metadataTypeManager.getPropertyInfo(propertyName);
+    return propertyInfo?.type || null;
   }
 
   private renderFilePathFilterUI(setting: Setting, filter: FilePathFilter): void {
@@ -1518,15 +1588,11 @@ class ViewEditorModal extends Modal {
   }
 
   private renderBookmarkFilterUI(setting: Setting, filter: BookmarkFilter): void {
-    setting.addDropdown(dropdown => {
-      dropdown
-        .addOption("true", "Is bookmarked")
-        .addOption("false", "Is not bookmarked")
-        .setValue(String(filter.isBookmarked ?? true))
-        .onChange(value => {
-          filter.isBookmarked = value === "true";
-        });
-    });
+    // Bookmark filter doesn't need additional controls - the NOT toggle handles everything
+    // Just set description
+    setting.setDesc("Files that are bookmarked (use NOT to find non-bookmarked files)");
+    // Ensure isBookmarked is always true (NOT toggle will negate if needed)
+    filter.isBookmarked = true;
   }
 
   /**
