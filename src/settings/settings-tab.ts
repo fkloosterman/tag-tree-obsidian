@@ -1841,6 +1841,11 @@ class ViewEditorModal extends Modal {
         };
       }
 
+      // Ensure filters array exists
+      if (!this.workingView.filters.filters) {
+        this.workingView.filters.filters = [];
+      }
+
       const newFilter = this.createDefaultFilter(filterType);
       const label = this.generateNextLabel();
       const labeledFilter: LabeledFilter = {
