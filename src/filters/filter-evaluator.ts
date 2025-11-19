@@ -91,6 +91,13 @@ export class FilterEvaluator {
    * Evaluate a single filter against a file
    */
   private evaluateFilter(file: TFile, filter: Filter): boolean {
+    // Clean up legacy negate field from filters that don't use it
+    // Only PropertyExistsFilter should have negate field
+    if (filter.type !== "property-exists" && filter.negate !== undefined) {
+      console.log(`[TagTree] Cleaning up legacy negate field from ${filter.type} filter`);
+      delete filter.negate;
+    }
+
     let result: boolean;
 
     try {
