@@ -325,190 +325,297 @@ export class TreeToolbar {
    * Render interactive filter controls (for eye-selected filters)
    */
   private renderInteractiveFilters(container: HTMLElement, interactiveFilters: any[]): void {
-    const group = container.createDiv({ cls: "tag-tree-toolbar-group tag-tree-interactive-filters" });
+    const section = container.createDiv({ cls: "tag-tree-quick-filters" });
+    section.style.padding = "var(--size-4-2) var(--size-4-3)";
+    section.style.backgroundColor = "var(--background-secondary)";
+    section.style.borderRadius = "var(--radius-s)";
+    section.style.marginBottom = "var(--size-4-2)";
 
-    const label = group.createSpan({ text: "Quick Filters: " });
-    label.style.marginRight = "var(--size-4-2)";
-    label.style.fontWeight = "600";
+    // Title
+    const title = section.createEl("div", { text: "Quick Filters" });
+    title.style.fontWeight = "600";
+    title.style.marginBottom = "var(--size-4-2)";
+    title.style.fontSize = "0.9em";
 
-    interactiveFilters.forEach((labeledFilter, index) => {
-      if (index > 0) {
-        group.createSpan({ text: " | " }).style.margin = "0 var(--size-2-2)";
-      }
-
-      const filterEl = group.createSpan({ cls: "tag-tree-quick-filter" });
-
-      // Filter label badge
-      const badge = filterEl.createSpan({ text: labeledFilter.label });
-      badge.style.display = "inline-block";
-      badge.style.padding = "2px 6px";
-      badge.style.marginRight = "4px";
-      badge.style.backgroundColor = "var(--interactive-accent)";
-      badge.style.color = "var(--text-on-accent)";
-      badge.style.borderRadius = "var(--radius-s)";
-      badge.style.fontSize = "0.85em";
-      badge.style.fontWeight = "600";
-
-      // Add interactive controls based on filter type
-      this.renderQuickFilterControl(filterEl, labeledFilter);
+    // Render each filter as a row
+    interactiveFilters.forEach((labeledFilter) => {
+      this.renderQuickFilterRow(section, labeledFilter);
     });
   }
 
   /**
-   * Render interactive control for a specific filter
+   * Render a single filter row with controls
    */
-  private renderQuickFilterControl(container: HTMLElement, labeledFilter: any): void {
+  private renderQuickFilterRow(container: HTMLElement, labeledFilter: any): void {
     const filter = labeledFilter.filter;
 
-    switch (filter.type) {
-      case "tag": {
-        // Tag filter: show tag name and match mode dropdown
-        const tagInput = container.createEl("input", { type: "text" });
-        tagInput.value = filter.tag || "";
-        tagInput.placeholder = "Tag";
-        tagInput.style.width = "120px";
-        tagInput.style.marginRight = "4px";
-        tagInput.addEventListener("change", () => {
-          filter.tag = tagInput.value;
-          this.onFilterChanged();
-        });
+    const row = container.createDiv({ cls: "tag-tree-quick-filter-row" });
+    row.style.display = "flex";
+    row.style.alignItems = "center";
+    row.style.gap = "var(--size-4-2)";
+    row.style.marginBottom = "var(--size-4-2)";
+    row.style.padding = "var(--size-4-1)";
+    row.style.backgroundColor = "var(--background-primary)";
+    row.style.borderRadius = "var(--radius-s)";
 
-        const matchMode = new DropdownComponent(container);
-        matchMode.addOption("exact", "Exact");
-        matchMode.addOption("prefix", "Prefix");
-        matchMode.addOption("contains", "Contains");
-        matchMode.setValue(filter.matchMode || "prefix");
-        matchMode.onChange((value) => {
-          filter.matchMode = value as any;
-          this.onFilterChanged();
-        });
-        matchMode.selectEl.style.width = "auto";
-        break;
-      }
+    // Filter label badge
+    const badge = row.createSpan({ text: labeledFilter.label });
+    badge.style.display = "inline-block";
+    badge.style.padding = "4px 8px";
+    badge.style.backgroundColor = "var(--interactive-accent)";
+    badge.style.color = "var(--text-on-accent)";
+    badge.style.borderRadius = "var(--radius-s)";
+    badge.style.fontSize = "0.85em";
+    badge.style.fontWeight = "700";
+    badge.style.minWidth = "24px";
+    badge.style.textAlign = "center";
 
-      case "property-exists": {
-        // Property exists: show property name and toggle for exists/not exists
-        const propInput = container.createEl("input", { type: "text" });
-        propInput.value = filter.property || "";
-        propInput.placeholder = "Property";
-        propInput.style.width = "120px";
-        propInput.style.marginRight = "4px";
-        propInput.addEventListener("change", () => {
-          filter.property = propInput.value;
-          this.onFilterChanged();
-        });
+    // Controls container
+    const controls = row.createDiv({ cls: "tag-tree-filter-controls" });
+    controls.style.display = "flex";
+    controls.style.alignItems = "center";
+    controls.style.gap = "var(--size-2-2)";
+    controls.style.flex = "1";
+    controls.style.flexWrap = "wrap";
 
-        const toggle = new ToggleComponent(container);
-        toggle.setValue(!filter.negate); // !negate = exists
-        toggle.setTooltip(filter.negate ? "Does not exist" : "Exists");
-        toggle.onChange((value) => {
-          filter.negate = !value; // true = exists, so negate = false
-          toggle.setTooltip(filter.negate ? "Does not exist" : "Exists");
-          this.onFilterChanged();
-        });
-        break;
-      }
-
-      case "property-value": {
-        // Property value: show property name and value based on operator
-        const propInput = container.createEl("input", { type: "text" });
-        propInput.value = filter.property || "";
-        propInput.placeholder = "Property";
-        propInput.style.width = "100px";
-        propInput.style.marginRight = "4px";
-        propInput.addEventListener("change", () => {
-          filter.property = propInput.value;
-          this.onFilterChanged();
-        });
-
-        // For boolean operators, show toggle
-        if (filter.operator === "is-true" || filter.operator === "is-false") {
-          const toggle = new ToggleComponent(container);
-          toggle.setValue(filter.operator === "is-true");
-          toggle.setTooltip(filter.operator === "is-true" ? "Is true" : "Is false");
-          toggle.onChange((value) => {
-            filter.operator = value ? "is-true" : "is-false";
-            toggle.setTooltip(filter.operator === "is-true" ? "Is true" : "Is false");
-            this.onFilterChanged();
-          });
-        } else {
-          // For other operators, show value input
-          const operatorEl = container.createSpan({ text: ` ${this.getOperatorSymbol(filter.operator)} ` });
-          operatorEl.style.marginRight = "4px";
-
-          const valueInput = container.createEl("input", { type: "text" });
-          valueInput.value = String(filter.value || "");
-          valueInput.placeholder = "Value";
-          valueInput.style.width = "80px";
-          valueInput.addEventListener("change", () => {
-            filter.value = valueInput.value;
-            this.onFilterChanged();
-          });
-        }
-        break;
-      }
-
-      case "bookmark": {
-        // Bookmark filter: toggle for is/is not bookmarked
-        const toggle = new ToggleComponent(container);
-        toggle.setValue(filter.isBookmarked);
-        toggle.setTooltip(filter.isBookmarked ? "Is bookmarked" : "Is not bookmarked");
-        toggle.onChange((value) => {
-          filter.isBookmarked = value;
-          toggle.setTooltip(filter.isBookmarked ? "Is bookmarked" : "Is not bookmarked");
-          this.onFilterChanged();
-        });
-        break;
-      }
-
-      case "file-path": {
-        // File path: show pattern input
-        const patternInput = container.createEl("input", { type: "text" });
-        patternInput.value = filter.pattern || "";
-        patternInput.placeholder = "Pattern";
-        patternInput.style.width = "150px";
-        patternInput.style.marginRight = "4px";
-        patternInput.addEventListener("change", () => {
-          filter.pattern = patternInput.value;
-          this.onFilterChanged();
-        });
-
-        const matchMode = new DropdownComponent(container);
-        matchMode.addOption("wildcard", "Wildcard");
-        matchMode.addOption("regex", "Regex");
-        matchMode.setValue(filter.matchMode || "wildcard");
-        matchMode.onChange((value) => {
-          filter.matchMode = value as any;
-          this.onFilterChanged();
-        });
-        matchMode.selectEl.style.width = "auto";
-        break;
-      }
-
-      default: {
-        // For other filter types, just show description (read-only for now)
-        const desc = container.createSpan({
-          text: this.getFilterDescription(filter),
-          cls: "setting-item-description"
-        });
-        desc.style.fontSize = "0.9em";
-        desc.style.marginLeft = "4px";
-        break;
-      }
-    }
+    this.renderFilterControls(controls, filter);
   }
 
   /**
-   * Get a short operator symbol for display
+   * Render controls for a specific filter type
    */
-  private getOperatorSymbol(operator: string): string {
-    const symbolMap: Record<string, string> = {
-      "equals": "=",
-      "not-equals": "≠",
-      "contains": "∋",
-      "not-contains": "∌",
-      "starts-with": "starts",
-      "ends-with": "ends",
+  private renderFilterControls(container: HTMLElement, filter: any): void {
+    switch (filter.type) {
+      case "tag":
+        this.renderTagFilterControls(container, filter);
+        break;
+      case "property-exists":
+        this.renderPropertyExistsFilterControls(container, filter);
+        break;
+      case "property-value":
+        this.renderPropertyValueFilterControls(container, filter);
+        break;
+      case "file-path":
+        this.renderFilePathFilterControls(container, filter);
+        break;
+      case "file-size":
+        this.renderFileSizeFilterControls(container, filter);
+        break;
+      case "file-ctime":
+      case "file-mtime":
+        this.renderFileDateFilterControls(container, filter);
+        break;
+      case "link-count":
+        this.renderLinkCountFilterControls(container, filter);
+        break;
+      case "bookmark":
+        this.renderBookmarkFilterControls(container, filter);
+        break;
+      default:
+        container.createSpan({ text: this.getFilterDescription(filter), cls: "setting-item-description" });
+        break;
+    }
+  }
+
+  private renderTagFilterControls(container: HTMLElement, filter: any): void {
+    const tagInput = container.createEl("input", { type: "text", cls: "tag-tree-filter-input" });
+    tagInput.value = filter.tag || "";
+    tagInput.placeholder = "Tag";
+    tagInput.style.width = "150px";
+    tagInput.addEventListener("change", () => {
+      filter.tag = tagInput.value;
+      this.onFilterChanged();
+    });
+
+    new DropdownComponent(container)
+      .addOption("prefix", "Prefix")
+      .addOption("exact", "Exact")
+      .addOption("contains", "Contains")
+      .setValue(filter.matchMode || "prefix")
+      .onChange((value) => {
+        filter.matchMode = value as any;
+        this.onFilterChanged();
+      });
+  }
+
+  private renderPropertyExistsFilterControls(container: HTMLElement, filter: any): void {
+    const propInput = container.createEl("input", { type: "text", cls: "tag-tree-filter-input" });
+    propInput.value = filter.property || "";
+    propInput.placeholder = "Property";
+    propInput.style.width = "150px";
+    propInput.addEventListener("change", () => {
+      filter.property = propInput.value;
+      this.onFilterChanged();
+    });
+
+    new DropdownComponent(container)
+      .addOption("exists", "exists")
+      .addOption("not-exists", "does not exist")
+      .setValue(filter.negate ? "not-exists" : "exists")
+      .onChange((value) => {
+        filter.negate = value === "not-exists";
+        this.onFilterChanged();
+      });
+  }
+
+  private renderPropertyValueFilterControls(container: HTMLElement, filter: any): void {
+    const propInput = container.createEl("input", { type: "text", cls: "tag-tree-filter-input" });
+    propInput.value = filter.property || "";
+    propInput.placeholder = "Property";
+    propInput.style.width = "120px";
+    propInput.addEventListener("change", () => {
+      filter.property = propInput.value;
+      this.onFilterChanged();
+    });
+
+    // For boolean operators, show toggle
+    if (filter.operator === "is-true" || filter.operator === "is-false") {
+      const label = container.createSpan({ text: "is" });
+      label.style.marginRight = "var(--size-2-1)";
+
+      new ToggleComponent(container)
+        .setValue(filter.operator === "is-true")
+        .setTooltip(filter.operator === "is-true" ? "true" : "false")
+        .onChange((value) => {
+          filter.operator = value ? "is-true" : "is-false";
+          this.onFilterChanged();
+        });
+    } else {
+      // For other operators, show operator display and value input
+      const opLabel = container.createSpan({ text: this.getOperatorLabel(filter.operator) });
+      opLabel.style.fontSize = "0.9em";
+      opLabel.style.color = "var(--text-muted)";
+
+      const valueInput = container.createEl("input", { type: "text", cls: "tag-tree-filter-input" });
+      valueInput.value = String(filter.value || "");
+      valueInput.placeholder = "Value";
+      valueInput.style.width = "100px";
+      valueInput.addEventListener("change", () => {
+        filter.value = valueInput.value;
+        this.onFilterChanged();
+      });
+    }
+  }
+
+  private renderFilePathFilterControls(container: HTMLElement, filter: any): void {
+    const patternInput = container.createEl("input", { type: "text", cls: "tag-tree-filter-input" });
+    patternInput.value = filter.pattern || "";
+    patternInput.placeholder = "Pattern";
+    patternInput.style.width = "200px";
+    patternInput.addEventListener("change", () => {
+      filter.pattern = patternInput.value;
+      this.onFilterChanged();
+    });
+
+    new DropdownComponent(container)
+      .addOption("wildcard", "Wildcard")
+      .addOption("regex", "Regex")
+      .setValue(filter.matchMode || "wildcard")
+      .onChange((value) => {
+        filter.matchMode = value as any;
+        this.onFilterChanged();
+      });
+  }
+
+  private renderFileSizeFilterControls(container: HTMLElement, filter: any): void {
+    new DropdownComponent(container)
+      .addOption("lt", "<")
+      .addOption("lte", "≤")
+      .addOption("gt", ">")
+      .addOption("gte", "≥")
+      .setValue(filter.operator || "gte")
+      .onChange((value) => {
+        filter.operator = value as any;
+        this.onFilterChanged();
+      });
+
+    const valueInput = container.createEl("input", { type: "text", cls: "tag-tree-filter-input" });
+    valueInput.value = String(filter.value || "");
+    valueInput.placeholder = "Size (e.g., 1.5 MB)";
+    valueInput.style.width = "120px";
+    valueInput.addEventListener("change", () => {
+      filter.value = valueInput.value;
+      this.onFilterChanged();
+    });
+  }
+
+  private renderFileDateFilterControls(container: HTMLElement, filter: any): void {
+    new DropdownComponent(container)
+      .addOption("on", "on")
+      .addOption("before", "before")
+      .addOption("after", "after")
+      .addOption("older-than-days", "older than (days)")
+      .addOption("within-days", "within last (days)")
+      .setValue(filter.operator || "after")
+      .onChange((value) => {
+        filter.operator = value as any;
+        this.onFilterChanged();
+      });
+
+    const valueInput = container.createEl("input", { type: "text", cls: "tag-tree-filter-input" });
+    valueInput.value = String(filter.value || "");
+    valueInput.placeholder = filter.operator === "older-than-days" || filter.operator === "within-days"
+      ? "Days"
+      : "Date (e.g., 2024-01-01, today, -7d)";
+    valueInput.style.width = "150px";
+    valueInput.addEventListener("change", () => {
+      filter.value = valueInput.value;
+      this.onFilterChanged();
+    });
+  }
+
+  private renderLinkCountFilterControls(container: HTMLElement, filter: any): void {
+    new DropdownComponent(container)
+      .addOption("outlinks", "Outlinks")
+      .addOption("backlinks", "Backlinks")
+      .setValue(filter.linkType || "outlinks")
+      .onChange((value) => {
+        filter.linkType = value as any;
+        this.onFilterChanged();
+      });
+
+    new DropdownComponent(container)
+      .addOption("lt", "<")
+      .addOption("lte", "≤")
+      .addOption("gt", ">")
+      .addOption("gte", "≥")
+      .setValue(filter.operator || "gte")
+      .onChange((value) => {
+        filter.operator = value as any;
+        this.onFilterChanged();
+      });
+
+    const valueInput = container.createEl("input", { type: "number", cls: "tag-tree-filter-input" });
+    valueInput.value = String(filter.value || "0");
+    valueInput.style.width = "80px";
+    valueInput.addEventListener("change", () => {
+      filter.value = parseInt(valueInput.value) || 0;
+      this.onFilterChanged();
+    });
+  }
+
+  private renderBookmarkFilterControls(container: HTMLElement, filter: any): void {
+    new DropdownComponent(container)
+      .addOption("is-bookmarked", "is bookmarked")
+      .addOption("not-bookmarked", "is not bookmarked")
+      .setValue(filter.isBookmarked ? "is-bookmarked" : "not-bookmarked")
+      .onChange((value) => {
+        filter.isBookmarked = value === "is-bookmarked";
+        this.onFilterChanged();
+      });
+  }
+
+  /**
+   * Get a readable operator label for display
+   */
+  private getOperatorLabel(operator: string): string {
+    const labelMap: Record<string, string> = {
+      "equals": "equals",
+      "not-equals": "not equals",
+      "contains": "contains",
+      "not-contains": "does not contain",
+      "starts-with": "starts with",
+      "ends-with": "ends with",
       "number-eq": "=",
       "number-lt": "<",
       "number-lte": "≤",
@@ -517,8 +624,14 @@ export class TreeToolbar {
       "date-before": "before",
       "date-after": "after",
       "date-eq": "on",
+      "date-older-than-days": "older than (days)",
+      "date-within-days": "within last (days)",
+      "lt": "<",
+      "lte": "≤",
+      "gt": ">",
+      "gte": "≥",
     };
-    return symbolMap[operator] || operator;
+    return labelMap[operator] || operator;
   }
 
   /**
@@ -589,28 +702,72 @@ export class TreeToolbar {
    */
   private getFilterDescription(filter: any): string {
     switch (filter.type) {
-      case "tag":
-        return `Tag ${filter.matchMode} "${filter.tag}"`;
-      case "property-exists":
-        return filter.negate ? `Does not have property "${filter.property}"` : `Has property "${filter.property}"`;
-      case "property-value": {
-        const operatorText = filter.operator === "is-true" ? "is true" :
-                             filter.operator === "is-false" ? "is false" :
-                             filter.operator;
-        return `Property "${filter.property}" ${operatorText}${filter.value !== undefined && filter.value !== "" ? " " + filter.value : ""}`;
+      case "tag": {
+        const mode = filter.matchMode === "exact" ? "exactly matches" :
+                     filter.matchMode === "contains" ? "contains" : "starts with";
+        return `Tag ${mode} "${filter.tag}"`;
       }
-      case "file-path":
-        return `Path ${filter.matchMode} "${filter.pattern}"`;
-      case "file-size":
-        return `Size ${filter.operator} ${filter.value}B`;
-      case "file-ctime":
-        return `Created ${filter.operator} ${filter.value}`;
-      case "file-mtime":
-        return `Modified ${filter.operator} ${filter.value}`;
-      case "link-count":
-        return `${filter.linkType} ${filter.operator} ${filter.value}`;
+      case "property-exists":
+        return filter.negate ? `File does not have property "${filter.property}"` : `File has property "${filter.property}"`;
+      case "property-value": {
+        if (filter.operator === "is-true") {
+          return `Property "${filter.property}" is true`;
+        } else if (filter.operator === "is-false") {
+          return `Property "${filter.property}" is false`;
+        } else {
+          const operatorLabel = this.getOperatorLabel(filter.operator);
+          return `Property "${filter.property}" ${operatorLabel} ${filter.value}`;
+        }
+      }
+      case "file-path": {
+        const mode = filter.matchMode === "regex" ? "matches regex" : "matches";
+        return `File path ${mode} "${filter.pattern}"`;
+      }
+      case "file-size": {
+        const op = filter.operator === "lt" ? "less than" :
+                   filter.operator === "lte" ? "at most" :
+                   filter.operator === "gt" ? "greater than" :
+                   filter.operator === "gte" ? "at least" : filter.operator;
+        return `File size is ${op} ${filter.value}`;
+      }
+      case "file-ctime": {
+        if (filter.operator === "older-than-days") {
+          return `File created more than ${filter.value} days ago`;
+        } else if (filter.operator === "within-days") {
+          return `File created within last ${filter.value} days`;
+        } else if (filter.operator === "before") {
+          return `File created before ${filter.value}`;
+        } else if (filter.operator === "after") {
+          return `File created after ${filter.value}`;
+        } else if (filter.operator === "on") {
+          return `File created on ${filter.value}`;
+        }
+        return `File created ${filter.operator} ${filter.value}`;
+      }
+      case "file-mtime": {
+        if (filter.operator === "older-than-days") {
+          return `File modified more than ${filter.value} days ago`;
+        } else if (filter.operator === "within-days") {
+          return `File modified within last ${filter.value} days`;
+        } else if (filter.operator === "before") {
+          return `File modified before ${filter.value}`;
+        } else if (filter.operator === "after") {
+          return `File modified after ${filter.value}`;
+        } else if (filter.operator === "on") {
+          return `File modified on ${filter.value}`;
+        }
+        return `File modified ${filter.operator} ${filter.value}`;
+      }
+      case "link-count": {
+        const linkType = filter.linkType === "outlinks" ? "outgoing links" : "backlinks";
+        const op = filter.operator === "lt" ? "fewer than" :
+                   filter.operator === "lte" ? "at most" :
+                   filter.operator === "gt" ? "more than" :
+                   filter.operator === "gte" ? "at least" : filter.operator;
+        return `File has ${op} ${filter.value} ${linkType}`;
+      }
       case "bookmark":
-        return filter.isBookmarked ? "Is bookmarked" : "Is not bookmarked";
+        return filter.isBookmarked ? "File is bookmarked" : "File is not bookmarked";
       default:
         return "Unknown filter";
     }

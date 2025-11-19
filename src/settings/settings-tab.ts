@@ -32,6 +32,7 @@ import {
   STRING_OPERATORS,
   NUMBER_OPERATORS,
   DATE_OPERATORS,
+  FILE_DATE_OPERATORS,
   BOOLEAN_OPERATORS,
   ARRAY_OPERATORS,
   SIZE_OPERATORS,
@@ -1650,24 +1651,39 @@ class ViewEditorModal extends Modal {
 
   private renderFileDateFilterUI(setting: Setting, filter: FileDateFilter): void {
     setting.addDropdown(dropdown => {
-      DATE_OPERATORS.forEach(op => {
+      FILE_DATE_OPERATORS.forEach(op => {
         dropdown.addOption(op.operator, op.label);
       });
       dropdown
         .setValue(filter.operator || "after")
         .onChange(value => {
           filter.operator = value as any;
+          // Re-render to show/hide value max input for range operators
+          this.renderEditor(this.contentEl);
         });
     });
 
     setting.addText(text => {
       text
-        .setPlaceholder("Date (e.g., 2024-01-01, today, -7d)")
+        .setPlaceholder("Date (e.g., 2024-01-01, today, -7d) or Days (for relative)")
         .setValue(String(filter.value || ""))
         .onChange(value => {
           filter.value = value;
         });
     });
+
+    // For range operators, add max value input
+    const currentOp = FILE_DATE_OPERATORS.find(op => op.operator === filter.operator);
+    if (currentOp?.needsValueMax) {
+      setting.addText(text => {
+        text
+          .setPlaceholder("Max value")
+          .setValue(String(filter.valueMax || ""))
+          .onChange(value => {
+            filter.valueMax = value;
+          });
+      });
+    }
   }
 
   private renderLinkCountFilterUI(setting: Setting, filter: LinkCountFilter): void {

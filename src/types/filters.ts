@@ -294,6 +294,36 @@ export const DATE_OPERATORS: OperatorMetadata[] = [
   },
 ];
 
+// File date operators (for file-ctime and file-mtime filters)
+// These don't have the "date-" prefix since they're specific to file dates
+export const FILE_DATE_OPERATORS: OperatorMetadata[] = [
+  { operator: "on", label: "on", needsValue: true },
+  { operator: "before", label: "before", needsValue: true },
+  { operator: "after", label: "after", needsValue: true },
+  {
+    operator: "in-range",
+    label: "in range",
+    needsValue: true,
+    needsValueMax: true,
+  },
+  {
+    operator: "out-range",
+    label: "out of range",
+    needsValue: true,
+    needsValueMax: true,
+  },
+  {
+    operator: "older-than-days",
+    label: "older than (days)",
+    needsValue: true,
+  },
+  {
+    operator: "within-days",
+    label: "within last (days)",
+    needsValue: true,
+  },
+];
+
 export const BOOLEAN_OPERATORS: OperatorMetadata[] = [
   { operator: "is-true", label: "is true", needsValue: false },
   { operator: "is-false", label: "is false", needsValue: false },
