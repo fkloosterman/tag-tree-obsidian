@@ -1477,6 +1477,11 @@ class ViewEditorModal extends Modal {
     // Detect property type and show appropriate operators
     const propertyType = this.detectPropertyType(filter.property);
 
+    // If we detected a type and it's not already set, save it to the filter
+    if (propertyType && !filter.valueType) {
+      filter.valueType = propertyType as any;
+    }
+
     // Add type selector for unregistered properties
     if (!propertyType && filter.property) {
       setting.addDropdown(dropdown => {
