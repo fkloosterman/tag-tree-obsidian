@@ -358,10 +358,11 @@ export class TreeToolbar {
       }).style.fontFamily = "monospace";
     }
 
-    // Show each filter
+    // Show each filter (only if showInToolbar is not false and filter is enabled)
     const filtersListEl = content.createEl("ul");
     filters.filters.forEach((labeledFilter) => {
       if (labeledFilter.enabled === false) return;
+      if (labeledFilter.showInToolbar === false) return; // Hide if explicitly set to false
 
       const filterText = `${labeledFilter.label}: ${this.getFilterDescription(labeledFilter.filter as any)}`;
       filtersListEl.createEl("li", { text: filterText });

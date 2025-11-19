@@ -1410,6 +1410,18 @@ class ViewEditorModal extends Modal {
         break;
     }
 
+    // Show in toolbar toggle
+    setting.addExtraButton(button => {
+      const showInToolbar = labeledFilter.showInToolbar !== false; // Default true
+      button
+        .setIcon(showInToolbar ? "eye" : "eye-off")
+        .setTooltip(showInToolbar ? "Hide from toolbar explanation" : "Show in toolbar explanation")
+        .onClick(() => {
+          labeledFilter.showInToolbar = !showInToolbar;
+          this.renderEditor(this.contentEl);
+        });
+    });
+
     // Delete button
     setting.addExtraButton(button => {
       button
@@ -1613,7 +1625,27 @@ class ViewEditorModal extends Modal {
       // Try different ways the type might be stored
       const type = propertyInfo.type || propertyInfo;
       console.log(`TagTree: Detected type for "${propertyName}":`, type);
-      return typeof type === "string" ? type : null;
+
+      // If type is a string, return it directly
+      if (typeof type === "string") {
+        return type;
+      }
+
+      // If type is an object with a widget property, map it to our type
+      if (typeof type === "object" && type.widget) {
+        const widgetMap: Record<string, string> = {
+          "checkbox": "boolean",
+          "number": "number",
+          "date": "date",
+          "datetime": "date",
+          "text": "string",
+          "multitext": "string",
+          "tags": "array",
+        };
+        const mappedType = widgetMap[type.widget] || "string";
+        console.log(`TagTree: Mapped widget "${type.widget}" to type "${mappedType}"`);
+        return mappedType;
+      }
     }
 
     return null;
