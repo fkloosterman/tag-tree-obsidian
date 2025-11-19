@@ -147,6 +147,13 @@
 }
 
 /* View Editor Modal - Fixed Header/Footer Layout */
+/* Prevent modal container from scrolling - only content wrapper should scroll */
+.modal:has(.tag-tree-modal-header) .modal-content {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
 .tag-tree-modal-header {
   position: sticky;
   top: 0;
@@ -156,6 +163,7 @@
   border-bottom: 1px solid var(--background-modifier-border);
   padding: var(--size-4-3) var(--size-4-4);
   z-index: 10;
+  flex-shrink: 0;
 }
 
 .tag-tree-modal-header .setting-item {
@@ -165,10 +173,11 @@
 }
 
 .tag-tree-modal-content {
-  max-height: calc(85vh - 180px); /* Account for modal header, view name header, and footer */
+  flex: 1 1 auto;
   overflow-y: auto;
   overflow-x: hidden;
   padding: var(--size-4-3) 0;
+  min-height: 0; /* Important for flex children to allow scrolling */
 }
 
 .tag-tree-modal-footer {
@@ -180,6 +189,7 @@
   border-top: 1px solid var(--background-modifier-border);
   padding: var(--size-4-3) var(--size-4-4);
   z-index: 10;
+  flex-shrink: 0;
 }
 
 .tag-tree-modal-footer .setting-item {

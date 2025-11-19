@@ -1275,35 +1275,6 @@ class ViewEditorModal extends Modal {
     const metadata = FILTER_TYPE_METADATA[filter.type];
     setting.setName(`${labeledFilter.label} - ${metadata.name}`);
 
-    // NOT toggle with label
-    setting.addToggle(toggle => {
-      const toggleContainer = toggle.toggleEl.parentElement!;
-
-      // Create NOT label
-      const notLabel = toggleContainer.createSpan({ cls: "tag-tree-filter-not-label" });
-
-      // Update toggle and label
-      const updateNotLabel = (value: boolean) => {
-        if (value) {
-          notLabel.setText(" NOT");
-          notLabel.style.display = "inline";
-        } else {
-          notLabel.style.display = "none";
-        }
-      };
-
-      toggle
-        .setValue(filter.negate || false)
-        .setTooltip("Negate (NOT)")
-        .onChange(value => {
-          filter.negate = value;
-          updateNotLabel(value);
-        });
-
-      // Set initial state
-      updateNotLabel(filter.negate || false);
-    });
-
     // Type-specific UI
     switch (filter.type) {
       case "tag":
@@ -1388,6 +1359,17 @@ class ViewEditorModal extends Modal {
         .setValue(filter.property || "")
         .onChange(value => {
           filter.property = value;
+        });
+    });
+
+    // Dropdown for exists/does not exist
+    setting.addDropdown(dropdown => {
+      dropdown
+        .addOption("exists", "exists")
+        .addOption("not-exists", "does not exist")
+        .setValue(filter.negate ? "not-exists" : "exists")
+        .onChange(value => {
+          filter.negate = value === "not-exists";
         });
     });
   }
@@ -1482,9 +1464,9 @@ class ViewEditorModal extends Modal {
         filter.operator = operators[0].operator as any;
       }
 
-      // Add a description for single, value-less operators (like boolean "is true")
+      // Add a description for single, value-less operators
       if (operators.length === 1 && !operators[0].needsValue) {
-        setting.setDesc(`Matches when property is ${operators[0].label} (use NOT toggle to invert)`);
+        setting.setDesc(`Matches when property is ${operators[0].label}`);
       }
     }
 
@@ -1672,11 +1654,16 @@ class ViewEditorModal extends Modal {
   }
 
   private renderBookmarkFilterUI(setting: Setting, filter: BookmarkFilter): void {
-    // Bookmark filter doesn't need additional controls - the NOT toggle handles everything
-    // Just set description
-    setting.setDesc("Files that are bookmarked (use NOT to find non-bookmarked files)");
-    // Ensure isBookmarked is always true (NOT toggle will negate if needed)
-    filter.isBookmarked = true;
+    // Dropdown for is bookmarked / is not bookmarked
+    setting.addDropdown(dropdown => {
+      dropdown
+        .addOption("is-bookmarked", "is bookmarked")
+        .addOption("not-bookmarked", "is not bookmarked")
+        .setValue(filter.isBookmarked ? "is-bookmarked" : "not-bookmarked")
+        .onChange(value => {
+          filter.isBookmarked = value === "is-bookmarked";
+        });
+    });
   }
 
   /**

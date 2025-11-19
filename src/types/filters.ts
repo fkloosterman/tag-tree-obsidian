@@ -296,7 +296,7 @@ export const DATE_OPERATORS: OperatorMetadata[] = [
 
 export const BOOLEAN_OPERATORS: OperatorMetadata[] = [
   { operator: "is-true", label: "is true", needsValue: false },
-  // Note: "is false" is achieved by using NOT toggle on "is true"
+  { operator: "is-false", label: "is false", needsValue: false },
 ];
 
 export const ARRAY_OPERATORS: OperatorMetadata[] = [
