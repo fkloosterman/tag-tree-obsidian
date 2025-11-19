@@ -226,7 +226,7 @@ export class FilterValidator {
     }
 
     // Check if value is required for this operator
-    const operatorsNotNeedingValue = ["is-true", "is-false", "array-is-empty", "array-not-empty"];
+    const operatorsNotNeedingValue = ["is-true", "array-is-empty", "array-not-empty"];
     if (!operatorsNotNeedingValue.includes(filter.operator)) {
       if (filter.value === undefined || filter.value === null || filter.value === "") {
         errors.push({

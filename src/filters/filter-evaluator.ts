@@ -380,8 +380,7 @@ export class FilterEvaluator {
     switch (operator) {
       case "is-true":
         return actualBool === true;
-      case "is-false":
-        return actualBool === false;
+      // Note: "is-false" is achieved by using NOT toggle on "is-true"
       default:
         return false;
     }

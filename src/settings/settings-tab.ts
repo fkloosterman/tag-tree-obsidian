@@ -1590,11 +1590,34 @@ class ViewEditorModal extends Modal {
 
     const metadataTypeManager = (this.app as any).metadataTypeManager;
     if (!metadataTypeManager) {
+      console.log("TagTree: metadataTypeManager not available");
       return null;
     }
 
-    const propertyInfo = metadataTypeManager.getPropertyInfo(propertyName);
-    return propertyInfo?.type || null;
+    // Try different API methods that might exist
+    let propertyInfo = null;
+
+    if (typeof metadataTypeManager.getPropertyInfo === "function") {
+      propertyInfo = metadataTypeManager.getPropertyInfo(propertyName);
+      console.log(`TagTree: getPropertyInfo("${propertyName}") =>`, propertyInfo);
+    } else if (typeof metadataTypeManager.getType === "function") {
+      propertyInfo = metadataTypeManager.getType(propertyName);
+      console.log(`TagTree: getType("${propertyName}") =>`, propertyInfo);
+    } else if (metadataTypeManager.properties) {
+      propertyInfo = metadataTypeManager.properties[propertyName];
+      console.log(`TagTree: properties["${propertyName}"] =>`, propertyInfo);
+    } else {
+      console.log("TagTree: metadataTypeManager methods:", Object.keys(metadataTypeManager));
+    }
+
+    if (propertyInfo) {
+      // Try different ways the type might be stored
+      const type = propertyInfo.type || propertyInfo;
+      console.log(`TagTree: Detected type for "${propertyName}":`, type);
+      return typeof type === "string" ? type : null;
+    }
+
+    return null;
   }
 
   private renderFilePathFilterUI(setting: Setting, filter: FilePathFilter): void {
