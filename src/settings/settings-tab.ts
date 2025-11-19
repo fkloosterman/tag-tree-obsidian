@@ -17,7 +17,7 @@ import { DEFAULT_LEVEL_COLORS } from "./plugin-settings";
 import { KOFI_SVG } from "../assets/kofi-logo";
 import {
   FilterConfig,
-  FilterGroup,
+  LabeledFilter,
   Filter,
   FilterType,
   FILTER_TYPE_METADATA,
@@ -38,6 +38,7 @@ import {
   LINK_COUNT_OPERATORS,
 } from "../types/filters";
 import { generateFilterId } from "../filters/filter-utils";
+import { ExpressionParser, validateFilterLabels } from "../filters/expression-parser";
 
 /**
  * Modal to display the changelog
@@ -391,9 +392,11 @@ export class TagTreeSettingsTab extends PluginSettingTab {
   private getViewDescription(view: HierarchyConfig): string {
     const parts: string[] = [];
 
-    if (view.filters && view.filters.groups && view.filters.groups.length > 0) {
-      const filterCount = view.filters.groups.reduce((sum, group) => sum + group.filters.length, 0);
-      parts.push(`Filters: ${filterCount} in ${view.filters.groups.length} group${view.filters.groups.length > 1 ? 's' : ''}`);
+    if (view.filters && view.filters.filters && view.filters.filters.length > 0) {
+      parts.push(`Filters: ${view.filters.filters.length}`);
+      if (view.filters.expression) {
+        parts.push(`Expression: ${view.filters.expression}`);
+      }
     }
 
     parts.push(
@@ -528,7 +531,6 @@ class ViewEditorModal extends Modal {
     colors: boolean;
     levels: boolean;
     levelItems: Map<number, boolean>;
-    filterGroups: Map<string, boolean>;
   } = {
     basic: true,
     filters: true,
@@ -537,7 +539,6 @@ class ViewEditorModal extends Modal {
     colors: false,
     levels: true,
     levelItems: new Map(),
-    filterGroups: new Map(),
   };
 
   constructor(
@@ -1187,39 +1188,42 @@ class ViewEditorModal extends Modal {
   private renderFilters(container: HTMLElement): void {
     const filtersContainer = container.createDiv({ cls: "tag-tree-filters-container" });
 
-    // Group combination mode
-    new Setting(filtersContainer)
-      .setName("Combine filter groups with")
-      .setDesc("How to combine multiple filter groups")
-      .addDropdown(dropdown => {
-        dropdown
-          .addOption("or", "OR (match any group)")
-          .addOption("and", "AND (match all groups)")
-          .setValue(this.workingView.filters!.combineWithOr ? "or" : "and")
-          .onChange(value => {
-            this.workingView.filters!.combineWithOr = value === "or";
-          });
-      });
+    // Individual filters list
+    const filtersListContainer = filtersContainer.createDiv({ cls: "tag-tree-labeled-filters" });
+    this.renderLabeledFilters(filtersListContainer);
 
-    // Filter groups
-    const groupsContainer = filtersContainer.createDiv({ cls: "tag-tree-filter-groups" });
-    this.renderFilterGroups(groupsContainer);
-
-    // Add filter group button
+    // Add filter button
     new Setting(filtersContainer)
       .addButton(button => {
         button
-          .setButtonText("+ Add Filter Group")
+          .setButtonText("+ Add Filter")
           .onClick(() => {
-            const newGroup: FilterGroup = {
-              id: generateFilterId(),
-              filters: [],
-              enabled: true,
-            };
-            this.workingView.filters!.groups.push(newGroup);
-            this.renderEditor(this.contentEl);
+            this.showFilterTypeSelectModal();
           });
       });
+
+    // Boolean expression input
+    const expressionSetting = new Setting(filtersContainer)
+      .setName("Boolean Expression")
+      .setDesc("Combine filters using: & (AND), | (OR), ! (NOT), (). Leave empty to AND all filters.");
+
+    expressionSetting.addTextArea(text => {
+      text
+        .setPlaceholder("e.g., (A & B) | (C & !D)")
+        .setValue(this.workingView.filters!.expression || "")
+        .onChange(value => {
+          this.workingView.filters!.expression = value;
+          // Validate expression
+          this.validateExpression();
+        });
+      text.inputEl.rows = 3;
+      text.inputEl.style.width = "100%";
+      text.inputEl.style.fontFamily = "monospace";
+    });
+
+    // Expression validation feedback
+    const validationContainer = filtersContainer.createDiv({ cls: "tag-tree-expression-validation" });
+    this.renderExpressionValidation(validationContainer);
   }
 
   /**
@@ -1290,90 +1294,53 @@ class ViewEditorModal extends Modal {
   }
 
   /**
-   * Render all filter groups
+   * Render all labeled filters
    */
-  private renderFilterGroups(container: HTMLElement): void {
+  private renderLabeledFilters(container: HTMLElement): void {
     container.empty();
 
-    if (!this.workingView.filters!.groups || this.workingView.filters!.groups.length === 0) {
+    if (!this.workingView.filters!.filters || this.workingView.filters!.filters.length === 0) {
       container.createEl("p", {
-        text: "No filter groups. Files will not be filtered.",
+        text: "No filters defined. Add filters below and combine them with a boolean expression.",
         cls: "setting-item-description",
       });
       return;
     }
 
-    this.workingView.filters!.groups.forEach((group, groupIndex) => {
-      const groupContainer = container.createDiv({ cls: "tag-tree-filter-group" });
+    // Show available labels
+    const labels = this.workingView.filters!.filters.map(lf => lf.label).join(', ');
+    container.createEl("p", {
+      text: `Available labels: ${labels}`,
+      cls: "setting-item-description",
+    }).style.marginBottom = "var(--size-4-2)";
 
-      // Group header
-      const groupHeader = groupContainer.createDiv({ cls: "tag-tree-filter-group-header" });
-
-      new Setting(groupHeader)
-        .setName(`Filter Group ${groupIndex + 1}`)
-        .addText(text => {
-          text
-            .setPlaceholder("Group name (optional)")
-            .setValue(group.name || "")
-            .onChange(value => {
-              group.name = value.trim() || undefined;
-            });
-        })
-        .addExtraButton(button => {
-          button
-            .setIcon("trash")
-            .setTooltip("Delete group")
-            .onClick(() => {
-              this.workingView.filters!.groups.splice(groupIndex, 1);
-              this.renderEditor(this.contentEl);
-            });
-        });
-
-      // Filters in this group
-      const filtersListContainer = groupContainer.createDiv({ cls: "tag-tree-filter-list" });
-      this.renderFiltersList(filtersListContainer, group, groupIndex);
-
-      // Add filter button
-      new Setting(groupContainer)
-        .addButton(button => {
-          button
-            .setButtonText("+ Add Filter")
-            .onClick(() => {
-              this.showFilterTypeSelectModal(group);
-            });
-        });
-    });
-  }
-
-  /**
-   * Render filters list within a group
-   */
-  private renderFiltersList(container: HTMLElement, group: FilterGroup, groupIndex: number): void {
-    container.empty();
-
-    if (!group.filters || group.filters.length === 0) {
-      container.createEl("p", {
-        text: "No filters in this group.",
-        cls: "setting-item-description",
-      });
-      return;
-    }
-
-    group.filters.forEach((filter, filterIndex) => {
+    this.workingView.filters!.filters.forEach((labeledFilter, index) => {
       const filterContainer = container.createDiv({ cls: "tag-tree-filter-item" });
-      this.renderFilter(filterContainer, filter, group, filterIndex);
+      this.renderLabeledFilter(filterContainer, labeledFilter, index);
     });
   }
 
   /**
-   * Render a single filter
+   * Render a single labeled filter
    */
-  private renderFilter(container: HTMLElement, filter: Filter, group: FilterGroup, filterIndex: number): void {
+  private renderLabeledFilter(container: HTMLElement, labeledFilter: LabeledFilter, index: number): void {
+    const filter = labeledFilter.filter;
     const setting = new Setting(container);
+
+    // Label badge
+    const labelBadge = setting.nameEl.createSpan({ cls: "tag-tree-filter-label-badge" });
+    labelBadge.setText(labeledFilter.label);
+    labelBadge.style.display = "inline-block";
+    labelBadge.style.padding = "2px 8px";
+    labelBadge.style.marginRight = "8px";
+    labelBadge.style.backgroundColor = "var(--interactive-accent)";
+    labelBadge.style.color = "var(--text-on-accent)";
+    labelBadge.style.borderRadius = "var(--radius-s)";
+    labelBadge.style.fontWeight = "600";
 
     // Filter type label
     const metadata = FILTER_TYPE_METADATA[filter.type];
-    setting.setName(metadata.name);
+    setting.setName(`${labeledFilter.label} - ${metadata.name}`);
 
     // NOT toggle with label
     setting.addToggle(toggle => {
@@ -1439,7 +1406,7 @@ class ViewEditorModal extends Modal {
         .setIcon("trash")
         .setTooltip("Delete filter")
         .onClick(() => {
-          group.filters.splice(filterIndex, 1);
+          this.workingView.filters!.filters.splice(index, 1);
           this.renderEditor(this.contentEl);
         });
     });
@@ -1743,12 +1710,116 @@ class ViewEditorModal extends Modal {
   }
 
   /**
+   * Validate the boolean expression
+   */
+  private validateExpression(): void {
+    // Re-render validation container
+    const container = this.contentEl.querySelector(".tag-tree-expression-validation") as HTMLElement;
+    if (container) {
+      this.renderExpressionValidation(container);
+    }
+  }
+
+  /**
+   * Render expression validation feedback
+   */
+  private renderExpressionValidation(container: HTMLElement): void {
+    container.empty();
+
+    const expression = this.workingView.filters!.expression?.trim() || "";
+    const labels = this.workingView.filters!.filters.map(lf => lf.label);
+
+    if (!expression && labels.length > 0) {
+      // No expression - will default to AND all
+      container.createEl("p", {
+        text: `✓ No expression provided - will default to: ${labels.join(' & ')}`,
+        cls: "tag-tree-expression-valid",
+      }).style.color = "var(--text-muted)";
+      return;
+    }
+
+    if (!expression) {
+      return; // No expression and no filters = nothing to validate
+    }
+
+    // Parse expression
+    const parser = new ExpressionParser();
+    const parseResult = parser.parse(expression);
+
+    if (parseResult.errors.length > 0) {
+      // Parse errors
+      const errorEl = container.createEl("div", { cls: "tag-tree-expression-error" });
+      errorEl.style.color = "var(--text-error)";
+      errorEl.createEl("strong", { text: "⚠ Expression Error:" });
+      const errorList = errorEl.createEl("ul");
+      errorList.style.marginLeft = "20px";
+      parseResult.errors.forEach(error => {
+        errorList.createEl("li", { text: error });
+      });
+      return;
+    }
+
+    // Validate labels
+    const labelErrors = validateFilterLabels(parseResult.ast, labels);
+    if (labelErrors.length > 0) {
+      const errorEl = container.createEl("div", { cls: "tag-tree-expression-error" });
+      errorEl.style.color = "var(--text-error)";
+      errorEl.createEl("strong", { text: "⚠ Label Error:" });
+      const errorList = errorEl.createEl("ul");
+      errorList.style.marginLeft = "20px";
+      labelErrors.forEach(error => {
+        errorList.createEl("li", { text: error });
+      });
+      return;
+    }
+
+    // Valid expression
+    container.createEl("p", {
+      text: "✓ Expression is valid",
+      cls: "tag-tree-expression-valid",
+    }).style.color = "var(--text-success)";
+  }
+
+  /**
+   * Generate next available label (A, B, C, ...)
+   */
+  private generateNextLabel(): string {
+    const existingLabels = new Set(this.workingView.filters!.filters.map(lf => lf.label));
+    const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
+    for (let i = 0; i < alphabet.length; i++) {
+      const label = alphabet[i];
+      if (!existingLabels.has(label)) {
+        return label;
+      }
+    }
+
+    // If all single letters are used, start with AA, AB, etc.
+    for (let i = 0; i < alphabet.length; i++) {
+      for (let j = 0; j < alphabet.length; j++) {
+        const label = alphabet[i] + alphabet[j];
+        if (!existingLabels.has(label)) {
+          return label;
+        }
+      }
+    }
+
+    return "Z" + Date.now(); // Fallback
+  }
+
+  /**
    * Show modal to select filter type
    */
-  private showFilterTypeSelectModal(group: FilterGroup): void {
+  private showFilterTypeSelectModal(): void {
     const modal = new FilterTypeSelectModal(this.app, (filterType: FilterType) => {
       const newFilter = this.createDefaultFilter(filterType);
-      group.filters.push(newFilter);
+      const label = this.generateNextLabel();
+      const labeledFilter: LabeledFilter = {
+        label,
+        filter: newFilter,
+        enabled: true,
+      };
+      this.workingView.filters!.filters.push(labeledFilter);
       this.renderEditor(this.contentEl);
     });
     modal.open();

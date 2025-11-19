@@ -127,7 +127,7 @@ export class TreeToolbar {
     }
 
     // Filter explanation section (collapsible, if view has filters)
-    if (this.currentViewConfig?.filters && this.currentViewConfig.filters.groups?.length > 0) {
+    if (this.currentViewConfig?.filters && this.currentViewConfig.filters.filters?.length > 0) {
       this.renderFilterExplanation(toolbar);
     }
 
@@ -342,26 +342,29 @@ export class TreeToolbar {
 
     const filters = this.currentViewConfig.filters;
 
-    // Show combination mode
-    const combineModeText = filters.combineWithOr ? "OR" : "AND";
-    content.createEl("div", {
-      text: `Filter groups combined with ${combineModeText}`,
-      cls: "tag-tree-filter-explanation-mode"
-    });
+    // Show expression
+    const expression = filters.expression?.trim() || "";
+    if (expression) {
+      content.createEl("div", {
+        text: `Expression: ${expression}`,
+        cls: "tag-tree-filter-explanation-mode"
+      }).style.fontFamily = "monospace";
+    } else {
+      // Default to AND all
+      const labels = filters.filters.map(lf => lf.label).join(' & ');
+      content.createEl("div", {
+        text: `Expression: ${labels} (default)`,
+        cls: "tag-tree-filter-explanation-mode"
+      }).style.fontFamily = "monospace";
+    }
 
-    // Show each group
-    filters.groups.forEach((group, index) => {
-      if (!group.enabled) return;
+    // Show each filter
+    const filtersListEl = content.createEl("ul");
+    filters.filters.forEach((labeledFilter) => {
+      if (labeledFilter.enabled === false) return;
 
-      const groupEl = content.createDiv({ cls: "tag-tree-filter-explanation-group" });
-      groupEl.createEl("strong", { text: `Group ${index + 1}:` });
-
-      const filtersListEl = groupEl.createEl("ul");
-
-      group.filters.forEach((filter) => {
-        const filterText = this.getFilterDescription(filter as any);
-        filtersListEl.createEl("li", { text: filterText });
-      });
+      const filterText = `${labeledFilter.label}: ${this.getFilterDescription(labeledFilter.filter as any)}`;
+      filtersListEl.createEl("li", { text: filterText });
     });
   }
 

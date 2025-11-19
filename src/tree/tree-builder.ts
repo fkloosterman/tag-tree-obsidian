@@ -531,7 +531,7 @@ export class TreeBuilder {
     const allFiles = this.indexer.getAllFiles();
     let files: TFile[];
 
-    if (config.filters && config.filters.groups && config.filters.groups.length > 0) {
+    if (config.filters && config.filters.filters && config.filters.filters.length > 0) {
       // Apply filters using FilterEvaluator
       const filterEvaluator = new FilterEvaluator(this.app, this.indexer);
       files = allFiles.filter((file) => filterEvaluator.evaluateFilters(file, config.filters));
