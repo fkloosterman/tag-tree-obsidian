@@ -601,8 +601,11 @@ class ViewEditorModal extends Modal {
   private renderEditor(containerEl: HTMLElement): void {
     containerEl.empty();
 
+    // Create scrollable content wrapper
+    const contentWrapper = containerEl.createDiv("tag-tree-modal-content");
+
     // View name (at the top, outside of sections)
-    new Setting(containerEl)
+    new Setting(contentWrapper)
       .setName("View name")
       .setDesc("Unique name for this view")
       .addText((text) =>
@@ -616,7 +619,7 @@ class ViewEditorModal extends Modal {
 
     // Filter Options Section (collapsible)
     const filterSection = this.createCollapsibleSection(
-      containerEl,
+      contentWrapper,
       "Filters",
       "filters",
       true
@@ -632,7 +635,7 @@ class ViewEditorModal extends Modal {
 
     // Sorting and Display Options Section (collapsible)
     const sortingSection = this.createCollapsibleSection(
-      containerEl,
+      contentWrapper,
       "Sorting & Display Options",
       "sorting",
       true
@@ -706,7 +709,7 @@ class ViewEditorModal extends Modal {
 
     // Level colors section (collapsible)
     const colorsSection = this.createCollapsibleSection(
-      containerEl,
+      contentWrapper,
       "Hierarchy Level Colors",
       "colors",
       false
@@ -758,7 +761,7 @@ class ViewEditorModal extends Modal {
 
     // Hierarchy levels section (collapsible)
     const levelsSection = this.createCollapsibleSection(
-      containerEl,
+      contentWrapper,
       "Hierarchy Levels",
       "levels",
       true
@@ -771,14 +774,10 @@ class ViewEditorModal extends Modal {
     const levelsContainer = levelsSection.createDiv();
     this.renderLevels(levelsContainer);
 
-    // Save/Cancel buttons
-    const buttonsContainer = containerEl.createDiv("modal-button-container");
-    buttonsContainer.style.display = "flex";
-    buttonsContainer.style.justifyContent = "flex-end";
-    buttonsContainer.style.gap = "8px";
-    buttonsContainer.style.marginTop = "16px";
+    // Fixed footer with Save/Cancel buttons
+    const footer = containerEl.createDiv("tag-tree-modal-footer");
 
-    new Setting(buttonsContainer)
+    new Setting(footer)
       .addButton((button) =>
         button
           .setButtonText("Cancel")

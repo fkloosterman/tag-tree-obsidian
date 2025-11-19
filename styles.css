@@ -146,6 +146,44 @@
   margin-top: 0;
 }
 
+/* View Editor Modal - Fixed Footer Layout */
+.tag-tree-modal-content {
+  max-height: calc(85vh - 120px); /* Account for modal header and footer */
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-bottom: var(--size-4-3);
+}
+
+.tag-tree-modal-footer {
+  position: sticky;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background-color: var(--background-primary);
+  border-top: 1px solid var(--background-modifier-border);
+  padding: var(--size-4-3) var(--size-4-4);
+  z-index: 10;
+}
+
+.tag-tree-modal-footer .setting-item {
+  border: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--size-2-3);
+}
+
+.tag-tree-modal-footer .setting-item-info {
+  display: none;
+}
+
+.tag-tree-modal-footer .setting-item-control {
+  display: flex;
+  gap: var(--size-2-3);
+  justify-content: flex-end;
+}
+
 /* Support buttons styling */
 .tag-tree-support-buttons button:hover {
   opacity: 0.9;
