@@ -625,7 +625,7 @@ class ViewEditorModal extends Modal {
     // Description
     new Setting(filterSection)
       .setName("")
-      .setDesc("Filter which files are shown in this view. Filters within a group use AND logic.");
+      .setDesc("Filter which files are shown in this view. Define individual filters and combine them with boolean expressions.");
 
     // Render filter UI
     this.renderFilters(filterSection);
@@ -1186,6 +1186,15 @@ class ViewEditorModal extends Modal {
    * Render the filters section
    */
   private renderFilters(container: HTMLElement): void {
+    // Ensure filters is initialized
+    if (!this.workingView.filters) {
+      this.workingView.filters = {
+        version: 2,
+        filters: [],
+        expression: "",
+      };
+    }
+
     const filtersContainer = container.createDiv({ cls: "tag-tree-filters-container" });
 
     // Individual filters list
@@ -1207,12 +1216,13 @@ class ViewEditorModal extends Modal {
       .setName("Boolean Expression")
       .setDesc("Combine filters using: & (AND), | (OR), ! (NOT), (). Leave empty to AND all filters.");
 
+    const filters = this.workingView.filters; // Store reference for closure
     expressionSetting.addTextArea(text => {
       text
         .setPlaceholder("e.g., (A & B) | (C & !D)")
-        .setValue(this.workingView.filters!.expression || "")
+        .setValue(filters.expression || "")
         .onChange(value => {
-          this.workingView.filters!.expression = value;
+          filters.expression = value;
           // Validate expression
           this.validateExpression();
         });
@@ -1299,7 +1309,7 @@ class ViewEditorModal extends Modal {
   private renderLabeledFilters(container: HTMLElement): void {
     container.empty();
 
-    if (!this.workingView.filters!.filters || this.workingView.filters!.filters.length === 0) {
+    if (!this.workingView.filters || !this.workingView.filters.filters || this.workingView.filters.filters.length === 0) {
       container.createEl("p", {
         text: "No filters defined. Add filters below and combine them with a boolean expression.",
         cls: "setting-item-description",
@@ -1308,13 +1318,13 @@ class ViewEditorModal extends Modal {
     }
 
     // Show available labels
-    const labels = this.workingView.filters!.filters.map(lf => lf.label).join(', ');
+    const labels = this.workingView.filters.filters.map(lf => lf.label).join(', ');
     container.createEl("p", {
       text: `Available labels: ${labels}`,
       cls: "setting-item-description",
     }).style.marginBottom = "var(--size-4-2)";
 
-    this.workingView.filters!.filters.forEach((labeledFilter, index) => {
+    this.workingView.filters.filters.forEach((labeledFilter, index) => {
       const filterContainer = container.createDiv({ cls: "tag-tree-filter-item" });
       this.renderLabeledFilter(filterContainer, labeledFilter, index);
     });
@@ -1726,8 +1736,13 @@ class ViewEditorModal extends Modal {
   private renderExpressionValidation(container: HTMLElement): void {
     container.empty();
 
-    const expression = this.workingView.filters!.expression?.trim() || "";
-    const labels = this.workingView.filters!.filters.map(lf => lf.label);
+    // Ensure filters is initialized
+    if (!this.workingView.filters) {
+      return;
+    }
+
+    const expression = this.workingView.filters.expression?.trim() || "";
+    const labels = this.workingView.filters.filters?.map(lf => lf.label) || [];
 
     if (!expression && labels.length > 0) {
       // No expression - will default to AND all
@@ -1784,7 +1799,12 @@ class ViewEditorModal extends Modal {
    * Generate next available label (A, B, C, ...)
    */
   private generateNextLabel(): string {
-    const existingLabels = new Set(this.workingView.filters!.filters.map(lf => lf.label));
+    // Ensure filters is initialized
+    if (!this.workingView.filters) {
+      return "A";
+    }
+
+    const existingLabels = new Set((this.workingView.filters.filters || []).map(lf => lf.label));
     const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
     for (let i = 0; i < alphabet.length; i++) {
@@ -1812,6 +1832,15 @@ class ViewEditorModal extends Modal {
    */
   private showFilterTypeSelectModal(): void {
     const modal = new FilterTypeSelectModal(this.app, (filterType: FilterType) => {
+      // Ensure filters is initialized
+      if (!this.workingView.filters) {
+        this.workingView.filters = {
+          version: 2,
+          filters: [],
+          expression: "",
+        };
+      }
+
       const newFilter = this.createDefaultFilter(filterType);
       const label = this.generateNextLabel();
       const labeledFilter: LabeledFilter = {
@@ -1819,7 +1848,7 @@ class ViewEditorModal extends Modal {
         filter: newFilter,
         enabled: true,
       };
-      this.workingView.filters!.filters.push(labeledFilter);
+      this.workingView.filters.filters.push(labeledFilter);
       this.renderEditor(this.contentEl);
     });
     modal.open();
