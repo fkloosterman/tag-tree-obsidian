@@ -1409,22 +1409,43 @@ class ViewEditorModal extends Modal {
         .setValue(filter.property || "")
         .onChange(value => {
           filter.property = value;
-          // Re-render to update operators when property changes
-          this.renderEditor(this.contentEl);
+          // Don't re-render on every keystroke - just update the value
         });
     });
 
     // Detect property type and show appropriate operators
     const propertyType = this.detectPropertyType(filter.property);
+
+    // Add type selector for unregistered properties
+    if (!propertyType && filter.property) {
+      setting.addDropdown(dropdown => {
+        dropdown
+          .addOption("string", "String")
+          .addOption("number", "Number")
+          .addOption("date", "Date")
+          .addOption("checkbox", "Boolean")
+          .addOption("tags", "List")
+          .setValue(filter.valueType || "string")
+          .onChange(value => {
+            filter.valueType = value as any;
+            // Re-render to update operators when type changes
+            this.renderEditor(this.contentEl);
+          });
+        dropdown.selectEl.style.width = "auto";
+      });
+    }
+
+    // Determine which operators to show
+    const effectiveType = propertyType || filter.valueType || "string";
     let operators = STRING_OPERATORS;
 
-    if (propertyType === "number") {
+    if (effectiveType === "number") {
       operators = NUMBER_OPERATORS;
-    } else if (propertyType === "date" || propertyType === "datetime") {
+    } else if (effectiveType === "date" || effectiveType === "datetime") {
       operators = DATE_OPERATORS;
-    } else if (propertyType === "checkbox") {
+    } else if (effectiveType === "checkbox") {
       operators = BOOLEAN_OPERATORS;
-    } else if (propertyType === "tags" || propertyType === "aliases") {
+    } else if (effectiveType === "tags" || effectiveType === "aliases") {
       operators = ARRAY_OPERATORS;
     }
 
@@ -1444,6 +1465,8 @@ class ViewEditorModal extends Modal {
         .setValue(filter.operator || operators[0]?.operator || "equals")
         .onChange(value => {
           filter.operator = value as any;
+          // Re-render to show/hide value inputs based on operator
+          this.renderEditor(this.contentEl);
         });
     });
 
@@ -1721,9 +1744,14 @@ class FilterTypeSelectModal extends Modal {
 
       const iconEl = button.createDiv();
       setIcon(iconEl, metadata.icon);
-      iconEl.style.marginBottom = "var(--size-2-2)";
+      iconEl.style.marginBottom = "var(--size-4-2)";
+      iconEl.style.color = "var(--text-muted)";
 
-      button.createEl("strong", { text: metadata.name });
+      const titleEl = button.createEl("div", { text: metadata.name });
+      titleEl.style.fontWeight = "600";
+      titleEl.style.marginBottom = "var(--size-2-2)";
+      titleEl.style.color = "var(--text-normal)";
+
       button.createEl("div", {
         text: metadata.description,
         cls: "setting-item-description",

@@ -776,6 +776,8 @@
   background-color: var(--background-secondary);
   cursor: pointer;
   transition: background-color 0.1s ease;
+  display: flex;
+  flex-direction: column;
 }
 
 .tag-tree-filter-type-button:hover {
@@ -787,13 +789,8 @@
   color: var(--text-muted);
 }
 
-.tag-tree-filter-type-button strong {
-  display: block;
-  margin-bottom: var(--size-2-2);
-  color: var(--text-normal);
-}
-
 .tag-tree-filter-type-button .setting-item-description {
   margin: 0;
   font-size: var(--font-ui-smaller);
+  line-height: 1.4;
 }
