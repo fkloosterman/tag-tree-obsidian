@@ -487,14 +487,35 @@ export class TagTreeView extends ItemView {
     const viewState = this.plugin.settings.viewStates[this.currentViewName];
     const tree = this.treeBuilder.buildFromHierarchy(viewConfig, viewState);
 
-    // Update toolbar with file count and current view config
+    // Update toolbar with unique file count and current view config
     if (this.toolbar) {
-      this.toolbar.setFileCount(tree.fileCount);
+      const uniqueFileCount = this.countUniqueFiles(tree);
+      this.toolbar.setFileCount(uniqueFileCount);
       this.toolbar.setCurrentViewConfig(viewConfig);
     }
 
     // Render tree
     this.treeComponent.render(tree, container);
+  }
+
+  /**
+   * Count unique files in the tree (same file can appear multiple times)
+   */
+  private countUniqueFiles(tree: TreeNode): number {
+    const uniqueFiles = new Set<string>();
+
+    const traverse = (node: TreeNode) => {
+      if (node.type === "file" && node.files && node.files.length > 0) {
+        // File nodes have a single file in their files array
+        uniqueFiles.add(node.files[0].path);
+      }
+      if (node.children) {
+        node.children.forEach(child => traverse(child));
+      }
+    };
+
+    traverse(tree);
+    return uniqueFiles.size;
   }
 
   /**

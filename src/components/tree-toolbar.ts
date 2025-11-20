@@ -35,6 +35,7 @@ export class TreeToolbar {
   private filterOverridesEnabled: boolean = false;
   private filterExplanationCollapsed: boolean = true;
   private fileCount: number = 0; // Number of files after filtering
+  private originalFilterValues: Map<string, any> = new Map(); // Store original filter values for reset
 
   // File sort mode labels for dropdown
   private readonly fileSortModeLabels: Record<FileSortMode, string> = {
@@ -310,8 +311,8 @@ export class TreeToolbar {
   private renderRefreshButton(row: HTMLElement): void {
     const group = row.createDiv({ cls: "tag-tree-toolbar-group" });
 
-    new ButtonComponent(group)
-      .setButtonText("Refresh")
+    const btn = new ButtonComponent(group)
+      .setButtonText("Apply Filters")
       .setIcon("refresh-cw")
       .setTooltip("Rebuild tree with current filters")
       .onClick(() => {
@@ -319,6 +320,9 @@ export class TreeToolbar {
           this.callbacks.onRefreshTree();
         }
       });
+
+    // Make the button more prominent
+    btn.buttonEl.addClass("mod-cta");
   }
 
   /**
@@ -336,12 +340,17 @@ export class TreeToolbar {
       this.renderFilterExpression(section, interactiveFilters);
     }
 
-    // Title
-    const title = section.createEl("div", { text: "Quick Filters" });
+    // Title with file count
+    const title = section.createEl("div");
     title.style.fontWeight = "600";
     title.style.marginBottom = "var(--size-4-2)";
     title.style.marginTop = "var(--size-4-3)";
     title.style.fontSize = "0.9em";
+
+    title.createSpan({ text: "Quick Filters " });
+    const countSpan = title.createSpan({ text: `(${this.fileCount} files)` });
+    countSpan.style.color = "var(--text-muted)";
+    countSpan.style.fontWeight = "400";
 
     // Render each filter as a row
     interactiveFilters.forEach((labeledFilter) => {
@@ -462,6 +471,32 @@ export class TreeToolbar {
     controls.style.flexWrap = "wrap";
 
     this.renderFilterControls(controls, filter);
+
+    // Reset button
+    const resetBtn = row.createEl("button", { cls: "clickable-icon" });
+    resetBtn.setAttribute("aria-label", "Reset to configured value");
+    setIcon(resetBtn, "reset");
+    resetBtn.style.marginLeft = "auto";
+    resetBtn.style.padding = "4px";
+    resetBtn.addEventListener("click", () => {
+      this.resetFilter(labeledFilter);
+    });
+  }
+
+  /**
+   * Reset a filter to its original configured value
+   */
+  private resetFilter(labeledFilter: any): void {
+    const originalFilter = this.originalFilterValues.get(labeledFilter.label);
+    if (!originalFilter) return;
+
+    // Restore all properties from the original filter
+    Object.keys(originalFilter).forEach(key => {
+      labeledFilter.filter[key] = originalFilter[key];
+    });
+
+    // Trigger rebuild
+    this.onFilterChanged();
   }
 
   /**
@@ -950,6 +985,15 @@ export class TreeToolbar {
    */
   setCurrentViewConfig(viewConfig: HierarchyConfig | null): void {
     this.currentViewConfig = viewConfig;
+
+    // Store original filter values for reset functionality
+    this.originalFilterValues.clear();
+    if (viewConfig?.filters?.filters) {
+      viewConfig.filters.filters.forEach((labeledFilter) => {
+        // Deep copy the filter object
+        this.originalFilterValues.set(labeledFilter.label, JSON.parse(JSON.stringify(labeledFilter.filter)));
+      });
+    }
 
     // Re-render toolbar to update filter controls
     if (this.container) {
