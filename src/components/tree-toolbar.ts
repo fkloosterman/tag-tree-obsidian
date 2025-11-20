@@ -98,36 +98,52 @@ export class TreeToolbar {
     // Collapsible header with view name
     const summary = details.createEl("summary", { cls: "tag-tree-toolbar-header" });
 
-    // First line: View name and switcher
+    // First line: Chevron + View name (clickable for view switching)
     const headerFirstLine = summary.createDiv({ cls: "tag-tree-toolbar-header-first-line" });
 
-    // View name (no icon)
+    // View name (clickable for view switching if multiple views exist)
     const viewTitle = headerFirstLine.createDiv({ cls: "tag-tree-toolbar-title" });
-    viewTitle.createSpan({ text: this.currentViewName, cls: "tag-tree-toolbar-view-name" });
+    const viewNameSpan = viewTitle.createSpan({ text: this.currentViewName, cls: "tag-tree-toolbar-view-name" });
 
-    // View switcher icon immediately to the right of view name (if multiple views exist)
+    // Make title clickable for view switching if multiple views exist
     if (this.savedViews.length > 1 && this.callbacks.onViewChange) {
-      const viewSwitcherIcon = viewTitle.createEl("button", {
-        cls: "clickable-icon tag-tree-view-switcher-icon",
-        attr: {
-          "aria-label": "Switch view",
-        },
-      });
-      setIcon(viewSwitcherIcon, "chevron-down");
-      viewSwitcherIcon.addEventListener("click", (e) => {
+      viewTitle.addClass("clickable");
+      viewTitle.style.cursor = "pointer";
+      viewTitle.addEventListener("click", (e) => {
         e.preventDefault();
         e.stopPropagation();
-        this.showViewSwitcherMenu(viewSwitcherIcon);
+        this.showViewSwitcherMenu(viewTitle);
       });
+      viewNameSpan.style.textDecoration = "underline";
+      viewNameSpan.style.textDecorationStyle = "dotted";
     }
 
-    // Second line: Header controls group
+    // Second line: Header controls group (reordered)
     const headerSecondLine = summary.createDiv({ cls: "tag-tree-toolbar-header-second-line" });
     const headerControlsGroup = headerSecondLine.createDiv({ cls: "tag-tree-header-controls" });
 
-    // Show files toggle in header
+    // Display mode toggle in header (first)
+    const displayModeToggle = headerControlsGroup.createEl("button", {
+      cls: "clickable-icon tag-tree-header-control",
+      attr: {
+        "aria-label": `Switch to ${this.currentDisplayMode === "tree" ? "flattened" : "tree"} view`,
+      },
+    });
+
+    // Set icon based on current mode
+    setIcon(displayModeToggle, this.currentDisplayMode === "tree" ? "git-branch" : "list");
+
+    displayModeToggle.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (this.callbacks.onDisplayModeToggle) {
+        this.callbacks.onDisplayModeToggle();
+      }
+    });
+
+    // Show files toggle in header (second)
     const showFilesToggle = headerControlsGroup.createEl("button", {
-      cls: `clickable-icon tag-tree-header-control ${this.showFiles ? "is-active" : ""}`,
+      cls: `clickable-icon tag-tree-header-control`,
       attr: {
         "aria-label": "Toggle file visibility",
         "role": "switch",
@@ -142,15 +158,38 @@ export class TreeToolbar {
       showFilesToggle.empty();
       setIcon(showFilesToggle, this.showFiles ? "eye" : "eye-off");
       showFilesToggle.setAttribute("aria-checked", String(this.showFiles));
-      if (this.showFiles) {
-        showFilesToggle.addClass("is-active");
-      } else {
-        showFilesToggle.removeClass("is-active");
-      }
       this.callbacks.onToggleFiles();
     });
 
-    // Sort files control in header (icon button)
+    // Expand all nodes (third)
+    const expandBtn = headerControlsGroup.createEl("button", {
+      cls: "clickable-icon tag-tree-header-control",
+      attr: {
+        "aria-label": "Expand all nodes",
+      },
+    });
+    setIcon(expandBtn, "unfold-vertical");
+    expandBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this.callbacks.onExpandAll();
+    });
+
+    // Collapse all nodes (fourth)
+    const collapseBtn = headerControlsGroup.createEl("button", {
+      cls: "clickable-icon tag-tree-header-control",
+      attr: {
+        "aria-label": "Collapse all nodes",
+      },
+    });
+    setIcon(collapseBtn, "fold-vertical");
+    collapseBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this.callbacks.onCollapseAll();
+    });
+
+    // Sort files control in header (fifth)
     const sortButton = headerControlsGroup.createEl("button", {
       cls: "clickable-icon tag-tree-header-control",
       attr: {
@@ -164,7 +203,7 @@ export class TreeToolbar {
       this.showSortMenu(sortButton);
     });
 
-    // Refresh/rebuild tree button in header
+    // Refresh/rebuild tree button in header (sixth)
     if (this.callbacks.onRefreshTree) {
       const refreshBtn = headerControlsGroup.createEl("button", {
         cls: "clickable-icon tag-tree-header-control",
@@ -182,52 +221,6 @@ export class TreeToolbar {
       });
     }
 
-    // Expand/collapse controls in header
-    const collapseBtn = headerControlsGroup.createEl("button", {
-      cls: "clickable-icon tag-tree-header-control",
-      attr: {
-        "aria-label": "Collapse all nodes",
-      },
-    });
-    setIcon(collapseBtn, "fold-vertical");
-    collapseBtn.addEventListener("click", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      this.callbacks.onCollapseAll();
-    });
-
-    const expandBtn = headerControlsGroup.createEl("button", {
-      cls: "clickable-icon tag-tree-header-control",
-      attr: {
-        "aria-label": "Expand all nodes",
-      },
-    });
-    setIcon(expandBtn, "unfold-vertical");
-    expandBtn.addEventListener("click", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      this.callbacks.onExpandAll();
-    });
-
-    // Display mode toggle in header
-    const displayModeToggle = headerControlsGroup.createEl("button", {
-      cls: "clickable-icon tag-tree-display-mode-toggle",
-      attr: {
-        "aria-label": `Switch to ${this.currentDisplayMode === "tree" ? "flattened" : "tree"} view`,
-      },
-    });
-
-    // Set icon based on current mode
-    setIcon(displayModeToggle, this.currentDisplayMode === "tree" ? "git-branch" : "list");
-
-    displayModeToggle.addEventListener("click", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      if (this.callbacks.onDisplayModeToggle) {
-        this.callbacks.onDisplayModeToggle();
-      }
-    });
-
     // Track collapse state
     details.addEventListener("toggle", () => {
       this.isCollapsed = !details.hasAttribute("open");
@@ -235,6 +228,19 @@ export class TreeToolbar {
 
     // Toolbar content
     const toolbar = details.createDiv("tag-tree-toolbar-content");
+
+    // Hierarchy description
+    if (this.currentViewConfig?.levels && this.currentViewConfig.levels.length > 0) {
+      const hierarchyDesc = toolbar.createEl("div", { cls: "tag-tree-hierarchy-description" });
+      hierarchyDesc.style.fontSize = "0.9em";
+      hierarchyDesc.style.color = "var(--text-muted)";
+      hierarchyDesc.style.marginBottom = "var(--size-4-2)";
+      hierarchyDesc.style.paddingBottom = "var(--size-4-1)";
+      hierarchyDesc.style.borderBottom = "1px solid var(--background-modifier-border)";
+
+      const descText = this.getHierarchyDescription();
+      hierarchyDesc.textContent = descText;
+    }
 
     // Filters title at top
     const filtersTitle = toolbar.createEl("div", { cls: "tag-tree-filters-title" });
@@ -257,20 +263,8 @@ export class TreeToolbar {
       }
     }
 
-    // Filter explanation section (collapsible, if view has filters)
-    if (this.currentViewConfig?.filters && this.currentViewConfig.filters.filters?.length > 0) {
-      this.renderFilterExplanation(toolbar);
-    }
-
-    // If no content was added, show a message
-    if (toolbar.children.length === 0) {
-      const emptyMessage = toolbar.createDiv("tag-tree-toolbar-empty");
-      emptyMessage.textContent = "No filters defined";
-      emptyMessage.style.color = "var(--text-muted)";
-      emptyMessage.style.fontSize = "0.9em";
-      emptyMessage.style.padding = "var(--size-4-2) 0";
-      emptyMessage.style.textAlign = "center";
-    }
+    // Filter explanation section (always show filter descriptions)
+    this.renderFilterExplanation(toolbar);
   }
 
   /**
@@ -777,8 +771,8 @@ export class TreeToolbar {
   private renderFilterExplanation(toolbar: HTMLElement): void {
     const content = toolbar.createDiv({ cls: "tag-tree-filter-explanation-content" });
 
-    if (!this.currentViewConfig?.filters) {
-      content.createSpan({ text: "No filters configured" });
+    if (!this.currentViewConfig?.filters || !this.currentViewConfig.filters.filters || this.currentViewConfig.filters.filters.length === 0) {
+      content.createSpan({ text: "No filters defined" });
       return;
     }
 
@@ -798,6 +792,32 @@ export class TreeToolbar {
       const filterText = `${labeledFilter.label}: ${this.getFilterDescription(labeledFilter.filter as any)}`;
       filterRow.textContent = filterText;
     });
+  }
+
+  /**
+   * Get description of the hierarchy configuration
+   */
+  private getHierarchyDescription(): string {
+    if (!this.currentViewConfig?.levels) {
+      return "";
+    }
+
+    const levels = this.currentViewConfig.levels;
+    const descriptions: string[] = [];
+
+    for (const level of levels) {
+      if (level.type === "tag") {
+        const tagLevel = level as any;
+        const key = tagLevel.key || "all tags";
+        const depth = tagLevel.depth === -1 ? "unlimited depth" : `${tagLevel.depth} level${tagLevel.depth > 1 ? 's' : ''}`;
+        descriptions.push(`Tags: ${key} (${depth})`);
+      } else if (level.type === "property") {
+        const propLevel = level as any;
+        descriptions.push(`Property: ${propLevel.key}`);
+      }
+    }
+
+    return `Grouped by: ${descriptions.join(" → ")}`;
   }
 
   /**
