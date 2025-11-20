@@ -27,6 +27,9 @@ export interface ViewState {
 
   /** Which filter types to expose in toolbar (configured per-view) */
   toolbarFilterTypes?: FilterType[];
+
+  /** Runtime display mode override (overrides config default) */
+  displayModeOverride?: import("./hierarchy-config").HierarchyDisplayMode;
 }
 
 /**

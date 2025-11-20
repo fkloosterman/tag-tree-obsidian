@@ -113,6 +113,12 @@ export function migrateSettings(settings: TagTreeSettings): void {
     if (!view.levelColorMode) {
       view.levelColorMode = "none";
     }
+
+    // Set default display mode to "tree" for existing views
+    if (!view.displayMode) {
+      view.displayMode = "tree";
+    }
+
     return view;
   });
 

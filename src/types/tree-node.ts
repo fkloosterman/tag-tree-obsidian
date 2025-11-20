@@ -41,6 +41,13 @@ export interface TreeNode {
 
     /** Index of the hierarchy level this node belongs to */
     levelIndex?: number;
+
+    /** For flattened nodes: array of path segments with their level indices and types */
+    flattenedPath?: Array<{
+      segment: string;
+      levelIndex: number;
+      levelType: "tag" | "property";
+    }>;
   };
 
   /** UI state (managed by TreeComponent) */
