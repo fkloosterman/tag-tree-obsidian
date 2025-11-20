@@ -23,44 +23,64 @@
   background-color: var(--background-primary);
 }
 
-.tag-tree-toolbar-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--size-4-2) var(--size-4-3);
+.tag-tree-toolbar-summary {
   cursor: pointer;
   user-select: none;
   list-style: none;
   background-color: var(--background-secondary);
   border-bottom: 1px solid var(--background-modifier-border);
+  position: relative;
 }
 
-.tag-tree-toolbar-header:hover {
+.tag-tree-toolbar-summary:hover {
   background-color: var(--background-modifier-hover);
 }
 
-.tag-tree-toolbar-header::before {
+.tag-tree-toolbar-summary::before {
   content: "";
   display: inline-block;
   width: 0;
   height: 0;
-  margin-right: var(--size-4-2);
+  position: absolute;
+  left: var(--size-4-3);
+  top: 50%;
+  transform: translateY(-50%);
   border-style: solid;
   border-width: 5px 0 5px 8px;
   border-color: transparent transparent transparent var(--text-muted);
   transition: transform 0.1s ease;
 }
 
-.tag-tree-toolbar[open] > .tag-tree-toolbar-header::before {
+.tag-tree-toolbar[open] > .tag-tree-toolbar-summary::before {
   transform: rotate(90deg);
+}
+
+.tag-tree-toolbar-header {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  padding: var(--size-4-2) var(--size-4-3);
+}
+
+.tag-tree-toolbar-header-first-line {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: var(--size-2-1);
 }
 
 .tag-tree-toolbar-title {
   display: flex;
   align-items: center;
   gap: var(--size-2-2);
+  font-size: var(--font-ui-larger);
   font-weight: var(--font-semibold);
-  flex: 1;
+}
+
+.tag-tree-toolbar-header-second-line {
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .tag-tree-toolbar-title svg {
@@ -82,7 +102,6 @@
   display: flex;
   align-items: center;
   gap: var(--size-2-1);
-  margin-left: auto;
 }
 
 /* Header control buttons */
@@ -102,6 +121,9 @@
 
 .tag-tree-header-control.is-active {
   background-color: var(--background-modifier-hover);
+}
+
+.tag-tree-header-control.is-active.tag-tree-file-visibility-toggle {
   color: var(--interactive-accent);
 }
 
@@ -477,7 +499,7 @@
 
 /* File nodes - slightly different styling */
 .tree-node[data-node-type="file"] .tree-node-header {
-  padding-left: var(--size-4-6); /* Extra indent for file nodes */
+  padding-left: var(--size-4-2); /* Reduced indent for file nodes */
 }
 
 .tree-node[data-node-type="file"] .tree-node-name {
@@ -983,6 +1005,12 @@
 
 .tag-tree-filter-explanation summary:hover {
   background-color: var(--background-modifier-hover);
+}
+
+.tag-tree-filter-expression {
+  margin-bottom: var(--size-4-2);
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
 }
 
 .tag-tree-filter-explanation-content {

@@ -17,6 +17,7 @@ export interface TreeToolbarCallbacks {
   onFilterOverrideToggle?: (enabled: boolean) => void;
   onQuickFilterChange?: () => void; // Called when a quick filter value changes
   onDisplayModeToggle?: () => void; // Called when display mode is toggled
+  onOpenViewSettings?: () => void; // Called when settings button is clicked
 }
 
 /**
@@ -96,10 +97,14 @@ export class TreeToolbar {
     }
 
     // Collapsible header with view name
-    const summary = details.createEl("summary", { cls: "tag-tree-toolbar-header" });
+    const summary = details.createEl("summary", { cls: "tag-tree-toolbar-summary" });
+    const headerContainer = summary.createDiv({ cls: "tag-tree-toolbar-header" });
+
+    // First line: View name and switcher
+    const headerFirstLine = headerContainer.createDiv({ cls: "tag-tree-toolbar-header-first-line" });
 
     // View name (no icon)
-    const viewTitle = summary.createDiv({ cls: "tag-tree-toolbar-title" });
+    const viewTitle = headerFirstLine.createDiv({ cls: "tag-tree-toolbar-title" });
     viewTitle.createSpan({ text: this.currentViewName, cls: "tag-tree-toolbar-view-name" });
 
     // View switcher icon immediately to the right of view name (if multiple views exist)
@@ -108,7 +113,6 @@ export class TreeToolbar {
         cls: "clickable-icon tag-tree-view-switcher-icon",
         attr: {
           "aria-label": "Switch view",
-          "title": "Switch view",
         },
       });
       setIcon(viewSwitcherIcon, "chevron-down");
@@ -119,124 +123,15 @@ export class TreeToolbar {
       });
     }
 
-    // Header controls group
-    const headerControlsGroup = summary.createDiv({ cls: "tag-tree-header-controls" });
+    // Second line: Header controls group (reordered)
+    const headerSecondLine = headerContainer.createDiv({ cls: "tag-tree-toolbar-header-second-line" });
+    const headerControlsGroup = headerSecondLine.createDiv({ cls: "tag-tree-header-controls" });
 
-    // Show files toggle in header
-    const showFilesToggle = headerControlsGroup.createEl("button", {
-      cls: `clickable-icon tag-tree-header-control ${this.showFiles ? "is-active" : ""}`,
-      attr: {
-        "aria-label": "Toggle file visibility",
-        "title": "Toggle file visibility",
-        "role": "switch",
-        "aria-checked": String(this.showFiles)
-      },
-    });
-    setIcon(showFilesToggle, this.showFiles ? "eye" : "eye-off");
-    showFilesToggle.addEventListener("click", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      this.showFiles = !this.showFiles;
-      showFilesToggle.empty();
-      setIcon(showFilesToggle, this.showFiles ? "eye" : "eye-off");
-      showFilesToggle.setAttribute("aria-checked", String(this.showFiles));
-      if (this.showFiles) {
-        showFilesToggle.addClass("is-active");
-      } else {
-        showFilesToggle.removeClass("is-active");
-      }
-      this.callbacks.onToggleFiles();
-    });
-
-    // Sort files control in header (compact dropdown)
-    const sortDropdown = headerControlsGroup.createEl("select", {
-      cls: "tag-tree-header-dropdown",
-      attr: {
-        "aria-label": "Sort files",
-        "title": "Sort files",
-      },
-    });
-
-    // Add sort options
-    const sortOptions = [
-      { value: "alpha-asc", label: "A-Z" },
-      { value: "alpha-desc", label: "Z-A" },
-      { value: "created-desc", label: "New" },
-      { value: "modified-desc", label: "Mod" },
-      { value: "size-desc", label: "Size" },
-    ];
-
-    sortOptions.forEach(option => {
-      const opt = sortDropdown.createEl("option", {
-        value: option.value,
-        text: option.label
-      });
-      if (option.value === this.currentFileSortMode) {
-        opt.selected = true;
-      }
-    });
-
-    sortDropdown.addEventListener("change", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      this.currentFileSortMode = sortDropdown.value as FileSortMode;
-      this.callbacks.onFileSortChange(this.currentFileSortMode);
-    });
-
-    // Refresh/rebuild tree button in header
-    if (this.callbacks.onRefreshTree) {
-      const refreshBtn = headerControlsGroup.createEl("button", {
-        cls: "clickable-icon tag-tree-header-control",
-        attr: {
-          "aria-label": "Rebuild tree with current filters",
-          "title": "Rebuild tree with current filters",
-        },
-      });
-      setIcon(refreshBtn, "refresh-cw");
-      refreshBtn.addEventListener("click", (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        if (this.callbacks.onRefreshTree) {
-          this.callbacks.onRefreshTree();
-        }
-      });
-    }
-
-    // Expand/collapse controls in header
-    const collapseBtn = headerControlsGroup.createEl("button", {
-      cls: "clickable-icon tag-tree-header-control",
-      attr: {
-        "aria-label": "Collapse all nodes",
-        "title": "Collapse all nodes",
-      },
-    });
-    setIcon(collapseBtn, "fold-vertical");
-    collapseBtn.addEventListener("click", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      this.callbacks.onCollapseAll();
-    });
-
-    const expandBtn = headerControlsGroup.createEl("button", {
-      cls: "clickable-icon tag-tree-header-control",
-      attr: {
-        "aria-label": "Expand all nodes",
-        "title": "Expand all nodes",
-      },
-    });
-    setIcon(expandBtn, "unfold-vertical");
-    expandBtn.addEventListener("click", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      this.callbacks.onExpandAll();
-    });
-
-    // Display mode toggle in header
+    // Display mode toggle in header (first)
     const displayModeToggle = headerControlsGroup.createEl("button", {
-      cls: "clickable-icon tag-tree-display-mode-toggle",
+      cls: "clickable-icon tag-tree-header-control",
       attr: {
         "aria-label": `Switch to ${this.currentDisplayMode === "tree" ? "flattened" : "tree"} view`,
-        "title": `Switch to ${this.currentDisplayMode === "tree" ? "flattened" : "tree"} view`,
       },
     });
 
@@ -251,6 +146,111 @@ export class TreeToolbar {
       }
     });
 
+    // Show files toggle in header (second)
+    const showFilesToggle = headerControlsGroup.createEl("button", {
+      cls: `clickable-icon tag-tree-header-control`,
+      attr: {
+        "aria-label": "Toggle file visibility",
+        "role": "switch",
+        "aria-checked": String(this.showFiles)
+      },
+    });
+    setIcon(showFilesToggle, this.showFiles ? "eye" : "eye-off");
+    showFilesToggle.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this.showFiles = !this.showFiles;
+      showFilesToggle.empty();
+      setIcon(showFilesToggle, this.showFiles ? "eye" : "eye-off");
+      showFilesToggle.setAttribute("aria-checked", String(this.showFiles));
+      this.callbacks.onToggleFiles();
+    });
+
+    // Expand all nodes (third)
+    const expandBtn = headerControlsGroup.createEl("button", {
+      cls: "clickable-icon tag-tree-header-control",
+      attr: {
+        "aria-label": "Expand all nodes",
+      },
+    });
+    setIcon(expandBtn, "unfold-vertical");
+    expandBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this.callbacks.onExpandAll();
+    });
+
+    // Collapse all nodes (fourth)
+    const collapseBtn = headerControlsGroup.createEl("button", {
+      cls: "clickable-icon tag-tree-header-control",
+      attr: {
+        "aria-label": "Collapse all nodes",
+      },
+    });
+    setIcon(collapseBtn, "fold-vertical");
+    collapseBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this.callbacks.onCollapseAll();
+    });
+
+    // Sort files control in header (fifth)
+    const sortButton = headerControlsGroup.createEl("button", {
+      cls: "clickable-icon tag-tree-header-control",
+      attr: {
+        "aria-label": "Sort files",
+      },
+    });
+    setIcon(sortButton, "arrow-up-down");
+    sortButton.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this.showSortMenu(sortButton);
+    });
+
+    // Refresh/rebuild tree button in header (sixth)
+    if (this.callbacks.onRefreshTree) {
+      const refreshBtn = headerControlsGroup.createEl("button", {
+        cls: "clickable-icon tag-tree-header-control",
+        attr: {
+          "aria-label": "Rebuild tree with current filters",
+        },
+      });
+      setIcon(refreshBtn, "refresh-cw");
+      refreshBtn.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (this.callbacks.onRefreshTree) {
+          this.callbacks.onRefreshTree();
+        }
+      });
+    }
+
+    // Settings button in header (last)
+    if (this.callbacks.onOpenViewSettings) {
+      const settingsBtn = headerControlsGroup.createEl("button", {
+        cls: "clickable-icon tag-tree-header-control",
+        attr: {
+          "aria-label": "Open view settings",
+        },
+      });
+      // Try to use an icon that's definitely available
+      try {
+        setIcon(settingsBtn, "sliders");
+      } catch (e) {
+        // Fallback: add text if icon fails
+        settingsBtn.textContent = "⚙";
+        settingsBtn.style.fontSize = "14px";
+      }
+      settingsBtn.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (this.callbacks.onOpenViewSettings) {
+          this.callbacks.onOpenViewSettings();
+        }
+      });
+    }
+
     // Track collapse state
     details.addEventListener("toggle", () => {
       this.isCollapsed = !details.hasAttribute("open");
@@ -259,30 +259,65 @@ export class TreeToolbar {
     // Toolbar content
     const toolbar = details.createDiv("tag-tree-toolbar-content");
 
-    // Interactive filter controls (for eye-selected filters)
+    // Grouped by section
+    const groupedByTitle = toolbar.createEl("div", { cls: "tag-tree-grouped-by-title" });
+    groupedByTitle.style.fontWeight = "600";
+    groupedByTitle.style.fontSize = "0.9em";
+    groupedByTitle.textContent = "Grouped by";
+
+    // Hierarchy description
+    if (this.currentViewConfig?.levels && this.currentViewConfig.levels.length > 0) {
+      const hierarchyDesc = toolbar.createEl("div", { cls: "tag-tree-hierarchy-description" });
+      hierarchyDesc.style.fontSize = "0.9em";
+      hierarchyDesc.style.color = "var(--text-muted)";
+      hierarchyDesc.style.marginBottom = "var(--size-4-2)";
+
+      const descText = this.getHierarchyDescription();
+      hierarchyDesc.textContent = descText;
+    }
+
+    // Files count
+    const filesCount = toolbar.createEl("div", { cls: "tag-tree-files-count" });
+    filesCount.style.fontSize = "0.9em";
+    filesCount.style.color = "var(--text-muted)";
+    filesCount.style.marginBottom = "var(--size-4-2)";
+    filesCount.style.fontWeight = "600"; // Make it bold
+
+    // For now, just show the filtered count. In a real implementation, we'd need total count
+    // TODO: Add total file count tracking
+    const hasFilters = this.currentViewConfig?.filters && this.currentViewConfig.filters.filters?.length > 0;
+    filesCount.textContent = hasFilters
+      ? `Found ${this.fileCount} files (filtered)`
+      : `Found ${this.fileCount} files`;
+
+    // Filters title (always show)
+    const filtersTitle = toolbar.createEl("div", { cls: "tag-tree-filters-title" });
+    filtersTitle.style.fontWeight = "600";
+    filtersTitle.style.fontSize = "0.9em";
+    filtersTitle.style.marginBottom = "var(--size-4-2)";
+    filtersTitle.createSpan({ text: "Filters " });
+    const countSpan = filtersTitle.createSpan({ text: `(${this.fileCount} files)` });
+    countSpan.style.color = "var(--text-muted)";
+    countSpan.style.fontWeight = "400";
+
+    // Filters section
     if (this.currentViewConfig?.filters && this.currentViewConfig.filters.filters?.length > 0) {
-      const interactiveFilters = this.currentViewConfig.filters.filters.filter(
+
+      // Filter expression (always show first)
+      const allFilters = this.currentViewConfig.filters.filters;
+      this.renderFilterExpression(toolbar, allFilters);
+
+      // Filter descriptions
+      this.renderFilterDescriptions(toolbar);
+
+      // Interactive filter controls (for eye-selected filters)
+      const toolbarVisibleFilters = this.currentViewConfig.filters.filters.filter(
         lf => lf.enabled !== false && lf.showInToolbar === true
       );
-      if (interactiveFilters.length > 0) {
+      if (toolbarVisibleFilters.length > 0) {
         const filterControlsRow = toolbar.createDiv("tag-tree-toolbar-row");
-        this.renderInteractiveFilters(filterControlsRow, interactiveFilters);
+        this.renderInteractiveFilters(filterControlsRow, toolbarVisibleFilters);
       }
-    }
-
-    // Filter explanation section (collapsible, if view has filters)
-    if (this.currentViewConfig?.filters && this.currentViewConfig.filters.filters?.length > 0) {
-      this.renderFilterExplanation(toolbar);
-    }
-
-    // If no content was added, show a message
-    if (toolbar.children.length === 0) {
-      const emptyMessage = toolbar.createDiv("tag-tree-toolbar-empty");
-      emptyMessage.textContent = "No filters defined";
-      emptyMessage.style.color = "var(--text-muted)";
-      emptyMessage.style.fontSize = "0.9em";
-      emptyMessage.style.padding = "var(--size-4-2) 0";
-      emptyMessage.style.textAlign = "center";
     }
   }
 
@@ -308,11 +343,53 @@ export class TreeToolbar {
       });
     });
 
+    // Show menu anchored to the left under the title
+    const rect = button.getBoundingClientRect();
+    menu.showAtPosition({
+      x: rect.left,
+      y: rect.bottom,
+    });
+  }
+
+  /**
+   * Show sort options menu
+   */
+  private showSortMenu(button: HTMLElement): void {
+    const { Menu } = require("obsidian");
+
+    const menu = new Menu();
+
+    // Add sort options
+    const sortOptions = [
+      { value: "alpha-asc", label: "A → Z" },
+      { value: "alpha-desc", label: "Z → A" },
+      { value: "created-desc", label: "Created ↓" },
+      { value: "created-asc", label: "Created ↑" },
+      { value: "modified-desc", label: "Modified ↓" },
+      { value: "modified-asc", label: "Modified ↑" },
+      { value: "size-desc", label: "Size ↓" },
+      { value: "size-asc", label: "Size ↑" },
+      { value: "none", label: "Unsorted" },
+    ];
+
+    sortOptions.forEach(option => {
+      menu.addItem((item: any) => {
+        item
+          .setTitle(option.label)
+          .setChecked(option.value === this.currentFileSortMode)
+          .onClick(() => {
+            this.currentFileSortMode = option.value as FileSortMode;
+            this.callbacks.onFileSortChange(this.currentFileSortMode);
+          });
+      });
+    });
+
     // Show menu at button position
-    menu.showAtMouseEvent({
-      clientX: button.getBoundingClientRect().left,
-      clientY: button.getBoundingClientRect().bottom,
-    } as MouseEvent);
+    const rect = button.getBoundingClientRect();
+    menu.showAtPosition({
+      x: rect.left,
+      y: rect.bottom,
+    });
   }
 
 
@@ -326,23 +403,6 @@ export class TreeToolbar {
     section.style.backgroundColor = "var(--background-secondary)";
     section.style.borderRadius = "var(--radius-s)";
     section.style.marginBottom = "var(--size-4-2)";
-
-    // Show filter expression with highlighted quick filter labels
-    if (this.currentViewConfig?.filters) {
-      this.renderFilterExpression(section, interactiveFilters);
-    }
-
-    // Title with file count
-    const title = section.createEl("div");
-    title.style.fontWeight = "600";
-    title.style.marginBottom = "var(--size-4-2)";
-    title.style.marginTop = "var(--size-4-3)";
-    title.style.fontSize = "0.9em";
-
-    title.createSpan({ text: "Quick Filters " });
-    const countSpan = title.createSpan({ text: `(${this.fileCount} files)` });
-    countSpan.style.color = "var(--text-muted)";
-    countSpan.style.fontWeight = "400";
 
     // Render each filter as a row
     interactiveFilters.forEach((labeledFilter) => {
@@ -363,8 +423,8 @@ export class TreeToolbar {
     const quickFilterLabels = new Set(interactiveFilters.map(f => f.label));
 
     const expressionContainer = container.createDiv({ cls: "tag-tree-filter-expression" });
-    expressionContainer.style.marginBottom = "var(--size-4-2)";
-    expressionContainer.style.fontSize = "0.9em";
+    expressionContainer.style.marginBottom = "var(--size-2-1)"; // Reduced gap
+    expressionContainer.style.fontSize = "var(--font-ui-small)"; // Standard Obsidian font
 
     const label = expressionContainer.createSpan({ text: "Expression: " });
     label.style.color = "var(--text-muted)";
@@ -529,8 +589,8 @@ export class TreeToolbar {
 
   private renderTagFilterControls(container: HTMLElement, filter: any): void {
     // Show tag name as read-only label
-    const tagLabel = container.createSpan({ text: `"${filter.tag}"` });
-    tagLabel.style.fontWeight = "500";
+    const tagLabel = container.createSpan({ text: filter.tag });
+    tagLabel.style.fontWeight = "400";
     tagLabel.style.marginRight = "var(--size-2-2)";
 
     // Allow changing match mode only
@@ -547,8 +607,8 @@ export class TreeToolbar {
 
   private renderPropertyExistsFilterControls(container: HTMLElement, filter: any): void {
     // Show property name as read-only label
-    const propLabel = container.createSpan({ text: `Property "${filter.property}"` });
-    propLabel.style.fontWeight = "500";
+    const propLabel = container.createSpan({ text: `Property ${filter.property}` });
+    propLabel.style.fontWeight = "400";
     propLabel.style.marginRight = "var(--size-2-2)";
 
     // Allow changing exists/not-exists only
@@ -565,6 +625,7 @@ export class TreeToolbar {
   private renderPropertyValueFilterControls(container: HTMLElement, filter: any): void {
     // Show property name as read-only label (no quotes, regular font)
     const propLabel = container.createSpan({ text: `Property ${filter.property}` });
+    propLabel.style.fontWeight = "400";
     propLabel.style.marginRight = "var(--size-2-2)";
 
     // For boolean operators, show dropdown instead of toggle
@@ -597,8 +658,8 @@ export class TreeToolbar {
 
   private renderFilePathFilterControls(container: HTMLElement, filter: any): void {
     // Show pattern as read-only label
-    const patternLabel = container.createSpan({ text: `"${filter.pattern}"` });
-    patternLabel.style.fontWeight = "500";
+    const patternLabel = container.createSpan({ text: filter.pattern });
+    patternLabel.style.fontWeight = "400";
     patternLabel.style.marginRight = "var(--size-2-2)";
 
     // Allow changing match mode only
@@ -614,6 +675,7 @@ export class TreeToolbar {
 
   private renderFileSizeFilterControls(container: HTMLElement, filter: any): void {
     const sizeLabel = container.createSpan({ text: "Size" });
+    sizeLabel.style.fontWeight = "400";
     sizeLabel.style.marginRight = "var(--size-2-1)";
 
     // Allow changing operator and value
@@ -641,6 +703,7 @@ export class TreeToolbar {
   private renderFileDateFilterControls(container: HTMLElement, filter: any): void {
     const dateType = filter.type === "file-ctime" ? "Created" : "Modified";
     const typeLabel = container.createSpan({ text: dateType });
+    typeLabel.style.fontWeight = "400";
     typeLabel.style.marginRight = "var(--size-2-1)";
 
     // Allow changing operator and value
@@ -673,7 +736,7 @@ export class TreeToolbar {
     const linkTypeLabel = container.createSpan({
       text: filter.linkType === "outlinks" ? "Outlinks" : "Backlinks"
     });
-    linkTypeLabel.style.fontWeight = "500";
+    linkTypeLabel.style.fontWeight = "400";
     linkTypeLabel.style.marginRight = "var(--size-2-2)";
 
     // Allow changing operator and value only
@@ -699,6 +762,7 @@ export class TreeToolbar {
 
   private renderBookmarkFilterControls(container: HTMLElement, filter: any): void {
     const bookmarkLabel = container.createSpan({ text: "File" });
+    bookmarkLabel.style.fontWeight = "400";
     bookmarkLabel.style.marginRight = "var(--size-2-1)";
 
     // Allow changing is/is-not bookmarked
@@ -751,26 +815,59 @@ export class TreeToolbar {
   }
 
   /**
+   * Render filter descriptions
+   */
+  private renderFilterDescriptions(container: HTMLElement): void {
+    if (!this.currentViewConfig?.filters || !this.currentViewConfig.filters.filters) {
+      return;
+    }
+
+    const allFilters = this.currentViewConfig.filters.filters.filter(lf => lf.enabled !== false);
+
+    // Show ALL filters (not just eye-selected ones) - no bullets, less indentation, standard font
+    const filtersContainer = container.createEl("div", { cls: "tag-tree-filter-descriptions" });
+    filtersContainer.style.marginTop = "var(--size-2-1)"; // Reduced gap
+    filtersContainer.style.fontSize = "var(--font-ui-medium)"; // Larger font for visibility
+    filtersContainer.style.fontWeight = "normal"; // Normal font weight
+    filtersContainer.style.color = "var(--text-normal)"; // Explicit color
+
+    allFilters.forEach((labeledFilter) => {
+      const filterRow = filtersContainer.createEl("div");
+      filterRow.style.marginBottom = "var(--size-2-2)";
+      filterRow.style.fontWeight = "normal"; // Normal font weight
+      filterRow.style.color = "var(--text-normal)"; // Explicit color
+
+      const filterText = `${labeledFilter.label}: ${this.getFilterDescription(labeledFilter.filter as any)}`;
+      filterRow.textContent = filterText;
+    });
+  }
+
+  /**
    * Render filter explanation (directly under filter controls)
    */
   private renderFilterExplanation(toolbar: HTMLElement): void {
     const content = toolbar.createDiv({ cls: "tag-tree-filter-explanation-content" });
 
-    if (!this.currentViewConfig?.filters) {
-      content.createSpan({ text: "No filters configured" });
+    if (!this.currentViewConfig?.filters || !this.currentViewConfig.filters.filters || this.currentViewConfig.filters.filters.length === 0) {
+      content.createSpan({ text: "No filters defined" });
       return;
     }
 
     const filters = this.currentViewConfig.filters;
+    const allFilters = filters.filters.filter(lf => lf.enabled !== false);
+    const interactiveFilters = allFilters.filter(lf => lf.showInToolbar === true);
+
+    // Show filter expression with highlighted quick filter labels
+    if (filters.expression || allFilters.length > 0) {
+      this.renderFilterExpression(content, interactiveFilters);
+    }
 
     // Show ALL filters (not just eye-selected ones) - no bullets, less indentation, larger font
     const filtersContainer = content.createEl("div");
     filtersContainer.style.marginTop = "var(--size-4-2)";
     filtersContainer.style.fontSize = "1.1em";
 
-    filters.filters.forEach((labeledFilter) => {
-      if (labeledFilter.enabled === false) return; // Skip disabled filters
-
+    allFilters.forEach((labeledFilter) => {
       const filterRow = filtersContainer.createEl("div");
       filterRow.style.marginBottom = "var(--size-2-2)";
 
@@ -780,30 +877,56 @@ export class TreeToolbar {
   }
 
   /**
+   * Get description of the hierarchy configuration
+   */
+  private getHierarchyDescription(): string {
+    if (!this.currentViewConfig?.levels) {
+      return "";
+    }
+
+    const levels = this.currentViewConfig.levels;
+    const descriptions: string[] = [];
+
+    for (const level of levels) {
+      if (level.type === "tag") {
+        const tagLevel = level as any;
+        const key = tagLevel.key || "all tags";
+        const depth = tagLevel.depth === -1 ? "unlimited depth" : `${tagLevel.depth} level${tagLevel.depth > 1 ? 's' : ''}`;
+        descriptions.push(`Tags: ${key} (${depth})`);
+      } else if (level.type === "property") {
+        const propLevel = level as any;
+        descriptions.push(`Property: ${propLevel.key}`);
+      }
+    }
+
+    return descriptions.join(" → ");
+  }
+
+  /**
    * Get human-readable description of a filter
    */
   private getFilterDescription(filter: any): string {
     switch (filter.type) {
       case "tag": {
         const mode = filter.matchMode === "exact" ? "exactly matches" :
-                     filter.matchMode === "contains" ? "contains" : "starts with";
-        return `Tag ${mode} "${filter.tag}"`;
+                      filter.matchMode === "contains" ? "contains" : "starts with";
+        return `Tag ${mode} ${filter.tag}`;
       }
       case "property-exists":
-        return filter.negate ? `File does not have property "${filter.property}"` : `File has property "${filter.property}"`;
+        return filter.negate ? `File does not have property ${filter.property}` : `File has property ${filter.property}`;
       case "property-value": {
         if (filter.operator === "is-true") {
-          return `Property "${filter.property}" is true`;
+          return `Property ${filter.property} is true`;
         } else if (filter.operator === "is-false") {
-          return `Property "${filter.property}" is false`;
+          return `Property ${filter.property} is false`;
         } else {
           const operatorLabel = this.getOperatorLabel(filter.operator);
-          return `Property "${filter.property}" ${operatorLabel} ${filter.value}`;
+          return `Property ${filter.property} ${operatorLabel} ${filter.value}`;
         }
       }
       case "file-path": {
         const mode = filter.matchMode === "regex" ? "matches regex" : "matches";
-        return `File path ${mode} "${filter.pattern}"`;
+        return `File path ${mode} ${filter.pattern}`;
       }
       case "file-size": {
         const op = filter.operator === "lt" ? "less than" :
@@ -946,9 +1069,20 @@ export class TreeToolbar {
 
     this.currentViewName = viewName;
 
+    // Also update the view config if we have it in saved views
+    const viewConfig = this.savedViews.find(view => view.name === viewName);
+    if (viewConfig) {
+      this.setCurrentViewConfig(viewConfig);
+    }
+
     // Clear original filter values when changing views
     // This allows fresh originals to be stored for the new view
     this.originalFilterValues.clear();
+
+    // Trigger a refresh to recount files for the new view
+    if (this.callbacks.onRefreshTree) {
+      this.callbacks.onRefreshTree();
+    }
 
     // Re-render toolbar to update view dropdown and header
     if (this.container) {
@@ -1007,9 +1141,18 @@ export class TreeToolbar {
 
     // Update file count displays without re-rendering the entire toolbar
     if (this.container) {
-      // Update count in interactive filters section
-      const countSpans = this.container.querySelectorAll('.tag-tree-quick-filters .tag-tree-toolbar-title span:last-child');
-      countSpans.forEach(span => {
+      // Update count in files count display
+      const filesCountEl = this.container.querySelector('.tag-tree-files-count') as HTMLElement;
+      if (filesCountEl) {
+        const hasFilters = this.currentViewConfig?.filters && this.currentViewConfig.filters.filters?.length > 0;
+        filesCountEl.textContent = hasFilters
+          ? `Found ${this.fileCount} files (filtered)`
+          : `Found ${this.fileCount} files`;
+      }
+
+      // Update count in filters title
+      const filterCountSpans = this.container.querySelectorAll('.tag-tree-filters-title span:last-child');
+      filterCountSpans.forEach(span => {
         span.textContent = `(${this.fileCount} files)`;
       });
     }
