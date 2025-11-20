@@ -98,12 +98,9 @@ export class TreeToolbar {
     // Collapsible header with view name
     const summary = details.createEl("summary", { cls: "tag-tree-toolbar-header" });
 
-    // First line: Chevron + View name (clickable for view switching)
-    const headerFirstLine = summary.createDiv({ cls: "tag-tree-toolbar-header-first-line" });
-
     // View name (clickable for view switching if multiple views exist)
-    const viewTitle = headerFirstLine.createDiv({ cls: "tag-tree-toolbar-title" });
-    const viewNameSpan = viewTitle.createSpan({ text: this.currentViewName, cls: "tag-tree-toolbar-view-name" });
+    const viewTitle = summary.createDiv({ cls: "tag-tree-toolbar-title" });
+    viewTitle.textContent = this.currentViewName;
 
     // Make title clickable for view switching if multiple views exist
     if (this.savedViews.length > 1 && this.callbacks.onViewChange) {
@@ -227,43 +224,58 @@ export class TreeToolbar {
     // Toolbar content
     const toolbar = details.createDiv("tag-tree-toolbar-content");
 
+    // Grouped by section
+    const groupedByTitle = toolbar.createEl("div", { cls: "tag-tree-grouped-by-title" });
+    groupedByTitle.style.fontWeight = "600";
+    groupedByTitle.style.fontSize = "0.9em";
+    groupedByTitle.textContent = "Grouped by";
+
     // Hierarchy description
     if (this.currentViewConfig?.levels && this.currentViewConfig.levels.length > 0) {
       const hierarchyDesc = toolbar.createEl("div", { cls: "tag-tree-hierarchy-description" });
       hierarchyDesc.style.fontSize = "0.9em";
       hierarchyDesc.style.color = "var(--text-muted)";
       hierarchyDesc.style.marginBottom = "var(--size-4-2)";
-      hierarchyDesc.style.paddingBottom = "var(--size-4-1)";
-      hierarchyDesc.style.borderBottom = "1px solid var(--background-modifier-border)";
 
       const descText = this.getHierarchyDescription();
       hierarchyDesc.textContent = descText;
     }
 
-    // Filters title at top
-    const filtersTitle = toolbar.createEl("div", { cls: "tag-tree-filters-title" });
-    filtersTitle.style.fontWeight = "600";
-    filtersTitle.style.marginBottom = "var(--size-4-2)";
-    filtersTitle.style.fontSize = "0.9em";
-    filtersTitle.createSpan({ text: "Filters " });
-    const countSpan = filtersTitle.createSpan({ text: `(${this.fileCount} files)` });
-    countSpan.style.color = "var(--text-muted)";
-    countSpan.style.fontWeight = "400";
+    // Files count
+    const filesCount = toolbar.createEl("div", { cls: "tag-tree-files-count" });
+    filesCount.style.fontSize = "0.9em";
+    filesCount.style.color = "var(--text-muted)";
+    filesCount.style.marginBottom = "var(--size-4-2)";
 
-    // Interactive filter controls (for eye-selected filters)
+    // For now, just show the filtered count. In a real implementation, we'd need total count
+    // TODO: Add total file count tracking
+    const hasFilters = this.currentViewConfig?.filters && this.currentViewConfig.filters.filters?.length > 0;
+    filesCount.textContent = hasFilters
+      ? `Found ${this.fileCount} files (filtered)`
+      : `Found ${this.fileCount} files`;
+
+    // Filters section
     if (this.currentViewConfig?.filters && this.currentViewConfig.filters.filters?.length > 0) {
-      const interactiveFilters = this.currentViewConfig.filters.filters.filter(
+      const filtersTitle = toolbar.createEl("div", { cls: "tag-tree-filters-title" });
+      filtersTitle.style.fontWeight = "600";
+      filtersTitle.style.fontSize = "0.9em";
+      filtersTitle.style.marginBottom = "var(--size-4-2)";
+      filtersTitle.textContent = "Filters";
+
+      // Filter expression
+      const toolbarVisibleFilters = this.currentViewConfig.filters.filters.filter(
         lf => lf.enabled !== false && lf.showInToolbar === true
       );
-      if (interactiveFilters.length > 0) {
-        const filterControlsRow = toolbar.createDiv("tag-tree-toolbar-row");
-        this.renderInteractiveFilters(filterControlsRow, interactiveFilters);
-      }
-    }
+      this.renderFilterExpression(toolbar, toolbarVisibleFilters);
 
-    // Filter explanation section (always show when filters are configured)
-    if (this.currentViewConfig?.filters && this.currentViewConfig.filters.filters?.length > 0) {
-      this.renderFilterExplanation(toolbar);
+      // Filter descriptions
+      this.renderFilterDescriptions(toolbar);
+
+      // Interactive filter controls (for eye-selected filters)
+      if (toolbarVisibleFilters.length > 0) {
+        const filterControlsRow = toolbar.createDiv("tag-tree-toolbar-row");
+        this.renderInteractiveFilters(filterControlsRow, toolbarVisibleFilters);
+      }
     }
   }
 
@@ -763,6 +775,30 @@ export class TreeToolbar {
     if (this.callbacks.onQuickFilterChange) {
       this.callbacks.onQuickFilterChange();
     }
+  }
+
+  /**
+   * Render filter descriptions
+   */
+  private renderFilterDescriptions(container: HTMLElement): void {
+    if (!this.currentViewConfig?.filters || !this.currentViewConfig.filters.filters) {
+      return;
+    }
+
+    const allFilters = this.currentViewConfig.filters.filters.filter(lf => lf.enabled !== false);
+
+    // Show ALL filters (not just eye-selected ones) - no bullets, less indentation, larger font
+    const filtersContainer = container.createEl("div", { cls: "tag-tree-filter-descriptions" });
+    filtersContainer.style.marginTop = "var(--size-4-2)";
+    filtersContainer.style.fontSize = "1.1em";
+
+    allFilters.forEach((labeledFilter) => {
+      const filterRow = filtersContainer.createEl("div");
+      filterRow.style.marginBottom = "var(--size-2-2)";
+
+      const filterText = `${labeledFilter.label}: ${this.getFilterDescription(labeledFilter.filter as any)}`;
+      filterRow.textContent = filterText;
+    });
   }
 
   /**

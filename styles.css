@@ -24,15 +24,13 @@
 }
 
 .tag-tree-toolbar-header {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
   padding: var(--size-4-2) var(--size-4-3);
   cursor: pointer;
   user-select: none;
   list-style: none;
   background-color: var(--background-secondary);
   border-bottom: 1px solid var(--background-modifier-border);
+  text-align: center;
 }
 
 .tag-tree-toolbar-header:hover {
@@ -40,29 +38,19 @@
 }
 
 .tag-tree-toolbar-title {
-  display: flex;
-  align-items: center;
-  gap: var(--size-2-2);
+  font-size: var(--font-ui-larger);
   font-weight: var(--font-semibold);
-  flex: 1;
-}
-
-.tag-tree-toolbar-header-first-line {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-  width: 100%;
   margin-bottom: var(--size-2-1);
+  position: relative;
 }
 
-.tag-tree-toolbar-header-first-line::before {
+.tag-tree-toolbar-title::before {
   content: "";
   display: inline-block;
   width: 0;
   height: 0;
   position: absolute;
-  left: 0;
+  left: -20px;
   top: 50%;
   transform: translateY(-50%);
   border-style: solid;
@@ -71,15 +59,15 @@
   transition: transform 0.1s ease;
 }
 
-.tag-tree-toolbar[open] > .tag-tree-toolbar-header > .tag-tree-toolbar-header-first-line::before {
+.tag-tree-toolbar[open] > .tag-tree-toolbar-header > .tag-tree-toolbar-title::before {
   transform: rotate(90deg);
 }
 
 .tag-tree-toolbar-header-second-line {
   display: flex;
-  align-items: center;
   justify-content: center;
-  width: 100%;
+  align-items: center;
+  gap: var(--size-2-1);
 }
 
 .tag-tree-toolbar-title svg {
