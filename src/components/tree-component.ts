@@ -124,8 +124,8 @@ export class TreeComponent {
     nodeEl.dataset.nodeId = node.id;
     nodeEl.dataset.nodeType = node.type;
 
-    // Add hierarchy level index for styling (but NOT for file nodes)
-    if (node.metadata?.levelIndex !== undefined && node.type !== "file") {
+    // Add hierarchy level index for styling (but NOT for file nodes and NOT for flattened nodes)
+    if (node.metadata?.levelIndex !== undefined && node.type !== "file" && !node.metadata?.flattenedPath) {
       nodeEl.dataset.levelIndex = String(node.metadata.levelIndex);
     }
 
@@ -170,19 +170,46 @@ export class TreeComponent {
       header.createSpan("tree-collapse-icon-placeholder");
     }
 
-    // Add node icon based on type
-    const nodeIcon = header.createSpan("tree-node-icon");
-    if (node.type === "file") {
-      setIcon(nodeIcon, "file");
-    } else if (node.type === "tag") {
-      setIcon(nodeIcon, "tags");
-    } else if (node.type === "property-group") {
-      setIcon(nodeIcon, "list");
+    // Add node icon based on type (skip for flattened nodes - they use segment icons)
+    if (!node.metadata?.flattenedPath) {
+      const nodeIcon = header.createSpan("tree-node-icon");
+      if (node.type === "file") {
+        setIcon(nodeIcon, "file");
+      } else if (node.type === "tag") {
+        setIcon(nodeIcon, "tags");
+      } else if (node.type === "property-group") {
+        setIcon(nodeIcon, "list");
+      }
     }
 
-    // Add node name
+    // Add node name (with support for flattened segments)
     const nameEl = header.createSpan("tree-node-name");
-    nameEl.textContent = node.name;
+
+    // Check if this is a flattened node with segments
+    if (node.metadata?.flattenedPath && node.metadata.flattenedPath.length > 0) {
+      // Render each segment with its own color
+      node.metadata.flattenedPath.forEach((segment, index) => {
+        // Add icon for each segment in icon mode (use simple dot)
+        const iconEl = nameEl.createSpan("tree-node-segment-icon");
+        iconEl.dataset.levelIndex = String(segment.levelIndex);
+        iconEl.textContent = "•"; // Simple dot instead of complex icons
+
+        const segmentEl = nameEl.createSpan("tree-node-name-segment");
+        segmentEl.textContent = segment.segment;
+
+        // Add level index for CSS styling
+        segmentEl.dataset.levelIndex = String(segment.levelIndex);
+
+        // Add separator if not the last segment
+        if (index < node.metadata!.flattenedPath!.length - 1) {
+          const separatorEl = nameEl.createSpan("tree-node-name-separator");
+          separatorEl.textContent = "; ";
+        }
+      });
+    } else {
+      // Regular node name rendering
+      nameEl.textContent = node.name;
+    }
 
     // Add file count (for non-file nodes)
     if (node.type !== "file" && node.fileCount > 0) {
@@ -506,6 +533,14 @@ export class TreeComponent {
     if (this.currentTree) {
       this.render(this.currentTree, this.container);
     }
+  }
+
+  /**
+   * Reset expansion state (used when switching display modes)
+   */
+  resetExpansionState(): void {
+    this.expandedNodes.clear();
+    this.hasInitializedExpansion = false;
   }
 
   /**

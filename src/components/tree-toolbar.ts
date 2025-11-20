@@ -1,6 +1,6 @@
 import { setIcon, DropdownComponent, ButtonComponent, ToggleComponent } from "obsidian";
 import { SortMode, FileSortMode } from "../types/view-state";
-import { HierarchyConfig } from "../types/hierarchy-config";
+import { HierarchyConfig, HierarchyDisplayMode } from "../types/hierarchy-config";
 import { FilterConfig } from "../types/filters";
 
 /**
@@ -16,6 +16,7 @@ export interface TreeToolbarCallbacks {
   onRefreshTree?: () => void;
   onFilterOverrideToggle?: (enabled: boolean) => void;
   onQuickFilterChange?: () => void; // Called when a quick filter value changes
+  onDisplayModeToggle?: () => void; // Called when display mode is toggled
 }
 
 /**
@@ -33,9 +34,10 @@ export class TreeToolbar {
   private currentViewConfig: HierarchyConfig | null = null;
   private isCollapsed: boolean = false;
   private filterOverridesEnabled: boolean = false;
-  private filterExplanationCollapsed: boolean = true;
   private fileCount: number = 0; // Number of files after filtering
   private originalFilterValues: Map<string, any> = new Map(); // Store original filter values for reset
+  private currentDisplayMode: HierarchyDisplayMode = "tree"; // Current display mode
+  private displayModeButton: HTMLElement | null = null; // Reference to the display mode toggle button
 
   // File sort mode labels for dropdown
   private readonly fileSortModeLabels: Record<FileSortMode, string> = {
@@ -65,7 +67,8 @@ export class TreeToolbar {
     initialShowFiles: boolean = true,
     savedViews: HierarchyConfig[] = [],
     currentViewName: string = "All Tags",
-    currentViewConfig: HierarchyConfig | null = null
+    currentViewConfig: HierarchyConfig | null = null,
+    initialDisplayMode: HierarchyDisplayMode = "tree"
   ) {
     this.callbacks = callbacks;
     this.currentFileSortMode = initialFileSortMode;
@@ -73,6 +76,7 @@ export class TreeToolbar {
     this.savedViews = savedViews;
     this.currentViewName = currentViewName;
     this.currentViewConfig = currentViewConfig;
+    this.currentDisplayMode = initialDisplayMode;
   }
 
   /**
@@ -94,17 +98,158 @@ export class TreeToolbar {
     // Collapsible header with view name
     const summary = details.createEl("summary", { cls: "tag-tree-toolbar-header" });
 
-    // View name with icon
+    // View name (no icon)
     const viewTitle = summary.createDiv({ cls: "tag-tree-toolbar-title" });
-    const viewIcon = viewTitle.createSpan();
-    setIcon(viewIcon, "layout-list");
     viewTitle.createSpan({ text: this.currentViewName, cls: "tag-tree-toolbar-view-name" });
 
-    // View switcher (if multiple views exist)
+    // View switcher icon immediately to the right of view name (if multiple views exist)
     if (this.savedViews.length > 1 && this.callbacks.onViewChange) {
-      const viewSwitcher = summary.createDiv({ cls: "tag-tree-toolbar-view-switcher" });
-      this.renderViewSwitcher(viewSwitcher);
+      const viewSwitcherIcon = viewTitle.createEl("button", {
+        cls: "clickable-icon tag-tree-view-switcher-icon",
+        attr: {
+          "aria-label": "Switch view",
+          "title": "Switch view",
+        },
+      });
+      setIcon(viewSwitcherIcon, "chevron-down");
+      viewSwitcherIcon.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this.showViewSwitcherMenu(viewSwitcherIcon);
+      });
     }
+
+    // Header controls group
+    const headerControlsGroup = summary.createDiv({ cls: "tag-tree-header-controls" });
+
+    // Show files toggle in header
+    const showFilesToggle = headerControlsGroup.createEl("button", {
+      cls: `clickable-icon tag-tree-header-control ${this.showFiles ? "is-active" : ""}`,
+      attr: {
+        "aria-label": "Toggle file visibility",
+        "title": "Toggle file visibility",
+        "role": "switch",
+        "aria-checked": String(this.showFiles)
+      },
+    });
+    setIcon(showFilesToggle, this.showFiles ? "eye" : "eye-off");
+    showFilesToggle.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this.showFiles = !this.showFiles;
+      showFilesToggle.empty();
+      setIcon(showFilesToggle, this.showFiles ? "eye" : "eye-off");
+      showFilesToggle.setAttribute("aria-checked", String(this.showFiles));
+      if (this.showFiles) {
+        showFilesToggle.addClass("is-active");
+      } else {
+        showFilesToggle.removeClass("is-active");
+      }
+      this.callbacks.onToggleFiles();
+    });
+
+    // Sort files control in header (compact dropdown)
+    const sortDropdown = headerControlsGroup.createEl("select", {
+      cls: "tag-tree-header-dropdown",
+      attr: {
+        "aria-label": "Sort files",
+        "title": "Sort files",
+      },
+    });
+
+    // Add sort options
+    const sortOptions = [
+      { value: "alpha-asc", label: "A-Z" },
+      { value: "alpha-desc", label: "Z-A" },
+      { value: "created-desc", label: "New" },
+      { value: "modified-desc", label: "Mod" },
+      { value: "size-desc", label: "Size" },
+    ];
+
+    sortOptions.forEach(option => {
+      const opt = sortDropdown.createEl("option", {
+        value: option.value,
+        text: option.label
+      });
+      if (option.value === this.currentFileSortMode) {
+        opt.selected = true;
+      }
+    });
+
+    sortDropdown.addEventListener("change", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this.currentFileSortMode = sortDropdown.value as FileSortMode;
+      this.callbacks.onFileSortChange(this.currentFileSortMode);
+    });
+
+    // Refresh/rebuild tree button in header
+    if (this.callbacks.onRefreshTree) {
+      const refreshBtn = headerControlsGroup.createEl("button", {
+        cls: "clickable-icon tag-tree-header-control",
+        attr: {
+          "aria-label": "Rebuild tree with current filters",
+          "title": "Rebuild tree with current filters",
+        },
+      });
+      setIcon(refreshBtn, "refresh-cw");
+      refreshBtn.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (this.callbacks.onRefreshTree) {
+          this.callbacks.onRefreshTree();
+        }
+      });
+    }
+
+    // Expand/collapse controls in header
+    const collapseBtn = headerControlsGroup.createEl("button", {
+      cls: "clickable-icon tag-tree-header-control",
+      attr: {
+        "aria-label": "Collapse all nodes",
+        "title": "Collapse all nodes",
+      },
+    });
+    setIcon(collapseBtn, "fold-vertical");
+    collapseBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this.callbacks.onCollapseAll();
+    });
+
+    const expandBtn = headerControlsGroup.createEl("button", {
+      cls: "clickable-icon tag-tree-header-control",
+      attr: {
+        "aria-label": "Expand all nodes",
+        "title": "Expand all nodes",
+      },
+    });
+    setIcon(expandBtn, "unfold-vertical");
+    expandBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this.callbacks.onExpandAll();
+    });
+
+    // Display mode toggle in header
+    const displayModeToggle = headerControlsGroup.createEl("button", {
+      cls: "clickable-icon tag-tree-display-mode-toggle",
+      attr: {
+        "aria-label": `Switch to ${this.currentDisplayMode === "tree" ? "flattened" : "tree"} view`,
+        "title": `Switch to ${this.currentDisplayMode === "tree" ? "flattened" : "tree"} view`,
+      },
+    });
+
+    // Set icon based on current mode
+    setIcon(displayModeToggle, this.currentDisplayMode === "tree" ? "git-branch" : "list");
+
+    displayModeToggle.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (this.callbacks.onDisplayModeToggle) {
+        this.callbacks.onDisplayModeToggle();
+      }
+    });
 
     // Track collapse state
     details.addEventListener("toggle", () => {
@@ -113,21 +258,6 @@ export class TreeToolbar {
 
     // Toolbar content
     const toolbar = details.createDiv("tag-tree-toolbar-content");
-
-    // Row 1: Expansion controls
-    const expansionRow = toolbar.createDiv("tag-tree-toolbar-row");
-    this.renderExpansionControls(expansionRow);
-
-    // Row 2: File visibility and sort controls
-    const controlsRow = toolbar.createDiv("tag-tree-toolbar-row");
-    this.renderFileVisibilityToggle(controlsRow);
-    this.renderSortControl(controlsRow);
-
-    // Row 3: Refresh button (if filter callback available)
-    if (this.callbacks.onRefreshTree) {
-      const refreshRow = toolbar.createDiv("tag-tree-toolbar-row");
-      this.renderRefreshButton(refreshRow);
-    }
 
     // Interactive filter controls (for eye-selected filters)
     if (this.currentViewConfig?.filters && this.currentViewConfig.filters.filters?.length > 0) {
@@ -144,186 +274,48 @@ export class TreeToolbar {
     if (this.currentViewConfig?.filters && this.currentViewConfig.filters.filters?.length > 0) {
       this.renderFilterExplanation(toolbar);
     }
-  }
 
-  /**
-   * Render view switcher dropdown
-   */
-  private renderViewSwitcher(container: HTMLElement): void {
-    // View dropdown using DropdownComponent (compact, no label)
-    new DropdownComponent(container)
-      .addOptions(
-        Object.fromEntries(
-          this.savedViews.map((view) => [view.name, view.name])
-        )
-      )
-      .setValue(this.currentViewName)
-      .onChange((value) => {
-        // Don't update currentViewName here - let setCurrentViewName do it
-        // This ensures the re-render happens when setCurrentViewName is called
-        if (this.callbacks.onViewChange) {
-          this.callbacks.onViewChange(value);
-        }
-      });
-  }
-
-  /**
-   * Render expansion controls (collapse/expand buttons and depth selector)
-   */
-  private renderExpansionControls(row: HTMLElement): void {
-    // Button group
-    const buttonGroup = row.createDiv({ cls: "tag-tree-toolbar-group" });
-
-    // Collapse All button
-    new ButtonComponent(buttonGroup)
-      .setButtonText("Collapse")
-      .setIcon("fold-vertical")
-      .setTooltip("Collapse all nodes")
-      .onClick(() => {
-        this.callbacks.onCollapseAll();
-      });
-
-    // Expand All button
-    new ButtonComponent(buttonGroup)
-      .setButtonText("Expand")
-      .setIcon("unfold-vertical")
-      .setTooltip("Expand all nodes")
-      .onClick(() => {
-        this.callbacks.onExpandAll();
-      });
-
-    // Depth selector group
-    const depthGroup = row.createDiv({ cls: "tag-tree-toolbar-group" });
-
-    // Depth selector label
-    const depthLabel = depthGroup.createSpan({ cls: "tag-tree-toolbar-label" });
-    const depthIcon = depthLabel.createSpan({ cls: "tag-tree-toolbar-icon" });
-    setIcon(depthIcon, "layers");
-    depthLabel.createSpan({ text: "Depth:" });
-
-    // Create depth level buttons using clickable-icon
-    const depthButtons = depthGroup.createDiv({ cls: "tag-tree-toolbar-buttons" });
-    for (const option of this.depthOptions) {
-      const btn = depthButtons.createEl("button", {
-        cls: "clickable-icon",
-        text: option.value === -1 ? "All" : String(option.value),
-        attr: {
-          "aria-label": `Expand to ${option.label}`,
-          "title": `Expand to ${option.label}`,
-        },
-      });
-
-      btn.addEventListener("click", () => {
-        if (option.value === -1) {
-          this.callbacks.onExpandAll();
-        } else {
-          this.callbacks.onExpandToDepth(option.value);
-        }
-      });
+    // If no content was added, show a message
+    if (toolbar.children.length === 0) {
+      const emptyMessage = toolbar.createDiv("tag-tree-toolbar-empty");
+      emptyMessage.textContent = "No filters defined";
+      emptyMessage.style.color = "var(--text-muted)";
+      emptyMessage.style.fontSize = "0.9em";
+      emptyMessage.style.padding = "var(--size-4-2) 0";
+      emptyMessage.style.textAlign = "center";
     }
   }
 
   /**
-   * Render file visibility toggle
+   * Show view switcher menu
    */
-  private renderFileVisibilityToggle(row: HTMLElement): void {
-    const group = row.createDiv({ cls: "tag-tree-toolbar-group" });
+  private showViewSwitcherMenu(button: HTMLElement): void {
+    const { Menu } = require("obsidian");
 
-    // Label
-    const label = group.createSpan({ cls: "tag-tree-toolbar-label" });
-    const icon = label.createSpan({ cls: "tag-tree-toolbar-icon" });
-    setIcon(icon, "file");
-    label.createSpan({ text: "Show Files:" });
+    const menu = new Menu();
 
-    // Toggle button using clickable-icon
-    const toggle = group.createEl("button", {
-      cls: this.showFiles ? "clickable-icon is-active" : "clickable-icon",
-      attr: {
-        "aria-label": "Toggle file visibility",
-        "role": "switch",
-        "aria-checked": String(this.showFiles)
-      },
+    // Add view options
+    this.savedViews.forEach((view) => {
+      menu.addItem((item: any) => {
+        item
+          .setTitle(view.name)
+          .setChecked(view.name === this.currentViewName)
+          .onClick(() => {
+            if (this.callbacks.onViewChange) {
+              this.callbacks.onViewChange(view.name);
+            }
+          });
+      });
     });
 
-    setIcon(toggle, this.showFiles ? "eye" : "eye-off");
-
-    toggle.addEventListener("click", () => {
-      this.showFiles = !this.showFiles;
-
-      // Update button state
-      if (this.showFiles) {
-        toggle.addClass("is-active");
-        toggle.setAttribute("aria-checked", "true");
-      } else {
-        toggle.removeClass("is-active");
-        toggle.setAttribute("aria-checked", "false");
-      }
-
-      // Update icon
-      toggle.empty();
-      setIcon(toggle, this.showFiles ? "eye" : "eye-off");
-
-      // Trigger callback
-      this.callbacks.onToggleFiles();
-    });
+    // Show menu at button position
+    menu.showAtMouseEvent({
+      clientX: button.getBoundingClientRect().left,
+      clientY: button.getBoundingClientRect().bottom,
+    } as MouseEvent);
   }
 
-  /**
-   * Render the file sort control dropdown
-   */
-  private renderSortControl(row: HTMLElement): void {
-    const group = row.createDiv({ cls: "tag-tree-toolbar-group" });
 
-    // Sort label with icon
-    const sortLabel = group.createSpan({ cls: "tag-tree-toolbar-label" });
-    const sortIcon = sortLabel.createSpan({ cls: "tag-tree-toolbar-icon" });
-    setIcon(sortIcon, "arrow-up-down");
-    sortLabel.createSpan({ text: "Sort files:" });
-
-    // Sort dropdown using DropdownComponent
-    const fileSortModes: FileSortMode[] = [
-      "alpha-asc",
-      "alpha-desc",
-      "created-desc",
-      "created-asc",
-      "modified-desc",
-      "modified-asc",
-      "size-desc",
-      "size-asc",
-    ];
-
-    new DropdownComponent(group)
-      .addOptions(
-        Object.fromEntries(
-          fileSortModes.map((mode) => [mode, this.fileSortModeLabels[mode]])
-        )
-      )
-      .setValue(this.currentFileSortMode)
-      .onChange((value) => {
-        this.currentFileSortMode = value as FileSortMode;
-        this.callbacks.onFileSortChange(this.currentFileSortMode);
-      });
-  }
-
-  /**
-   * Render refresh button
-   */
-  private renderRefreshButton(row: HTMLElement): void {
-    const group = row.createDiv({ cls: "tag-tree-toolbar-group" });
-
-    const btn = new ButtonComponent(group)
-      .setButtonText("Apply Filters")
-      .setIcon("refresh-cw")
-      .setTooltip("Rebuild tree with current filters")
-      .onClick(() => {
-        if (this.callbacks.onRefreshTree) {
-          this.callbacks.onRefreshTree();
-        }
-      });
-
-    // Make the button more prominent
-    btn.buttonEl.addClass("mod-cta");
-  }
 
   /**
    * Render interactive filter controls (for eye-selected filters)
@@ -759,29 +751,10 @@ export class TreeToolbar {
   }
 
   /**
-   * Render filter explanation (collapsible)
+   * Render filter explanation (directly under filter controls)
    */
   private renderFilterExplanation(toolbar: HTMLElement): void {
-    const details = toolbar.createEl("details", {
-      cls: "tag-tree-filter-explanation"
-    });
-
-    if (!this.filterExplanationCollapsed) {
-      details.setAttribute("open", "");
-    }
-
-    details.addEventListener("toggle", () => {
-      this.filterExplanationCollapsed = !details.hasAttribute("open");
-    });
-
-    const summary = details.createEl("summary");
-    summary.createSpan({ text: "Filter description" });
-
-    const fileCountEl = summary.createSpan({ text: ` (${this.fileCount} files)` });
-    fileCountEl.style.color = "var(--text-muted)";
-    fileCountEl.style.fontSize = "0.9em";
-
-    const content = details.createDiv({ cls: "tag-tree-filter-explanation-content" });
+    const content = toolbar.createDiv({ cls: "tag-tree-filter-explanation-content" });
 
     if (!this.currentViewConfig?.filters) {
       content.createSpan({ text: "No filters configured" });
@@ -793,14 +766,13 @@ export class TreeToolbar {
     // Show ALL filters (not just eye-selected ones) - no bullets, less indentation, larger font
     const filtersContainer = content.createEl("div");
     filtersContainer.style.marginTop = "var(--size-4-2)";
-    filtersContainer.style.fontSize = "0.95em";
+    filtersContainer.style.fontSize = "1.1em";
 
     filters.filters.forEach((labeledFilter) => {
       if (labeledFilter.enabled === false) return; // Skip disabled filters
 
       const filterRow = filtersContainer.createEl("div");
       filterRow.style.marginBottom = "var(--size-2-2)";
-      filterRow.style.paddingLeft = "var(--size-2-2)";
 
       const filterText = `${labeledFilter.label}: ${this.getFilterDescription(labeledFilter.filter as any)}`;
       filterRow.textContent = filterText;
@@ -985,9 +957,19 @@ export class TreeToolbar {
   }
 
   /**
+   * Get current view config
+   */
+  getCurrentViewConfig(): HierarchyConfig | null {
+    return this.currentViewConfig;
+  }
+
+  /**
    * Update the current view config (for filter information)
    */
   setCurrentViewConfig(viewConfig: HierarchyConfig | null): void {
+    const hadInteractiveFilters = this.currentViewConfig?.filters?.filters?.some(lf => lf.enabled !== false && lf.showInToolbar === true) ?? false;
+    const hasInteractiveFilters = viewConfig?.filters?.filters?.some(lf => lf.enabled !== false && lf.showInToolbar === true) ?? false;
+
     this.currentViewConfig = viewConfig;
 
     // Only store original filter values if we don't have them yet
@@ -999,8 +981,9 @@ export class TreeToolbar {
       });
     }
 
-    // Re-render toolbar to update filter controls
-    if (this.container) {
+    // Only re-render if the interactive filter state changed
+    // This prevents unnecessary re-renders that could reset display mode
+    if (hadInteractiveFilters !== hasInteractiveFilters && this.container) {
       this.render(this.container);
     }
   }
@@ -1022,9 +1005,13 @@ export class TreeToolbar {
 
     this.fileCount = count;
 
-    // Re-render toolbar to update file count display
+    // Update file count displays without re-rendering the entire toolbar
     if (this.container) {
-      this.render(this.container);
+      // Update count in interactive filters section
+      const countSpans = this.container.querySelectorAll('.tag-tree-quick-filters .tag-tree-toolbar-title span:last-child');
+      countSpans.forEach(span => {
+        span.textContent = `(${this.fileCount} files)`;
+      });
     }
   }
 
@@ -1042,5 +1029,41 @@ export class TreeToolbar {
     if (this.container) {
       this.render(this.container);
     }
+  }
+
+  /**
+   * Set display mode
+   */
+  setDisplayMode(mode: HierarchyDisplayMode): void {
+    if (this.currentDisplayMode === mode) {
+      return;
+    }
+
+    this.currentDisplayMode = mode;
+
+    // Update the toggle button icon directly
+    if (this.container) {
+      const displayModeBtn = this.container.querySelector('.tag-tree-display-mode-toggle') as HTMLElement;
+
+      if (displayModeBtn) {
+        // Clear existing icon
+        displayModeBtn.empty();
+
+        // Set new icon based on current mode
+        setIcon(displayModeBtn, this.currentDisplayMode === "tree" ? "git-branch" : "list");
+
+        // Update aria-label and title
+        const newLabel = `Switch to ${this.currentDisplayMode === "tree" ? "flattened" : "tree"} view`;
+        displayModeBtn.setAttribute("aria-label", newLabel);
+        displayModeBtn.setAttribute("title", newLabel);
+      }
+    }
+  }
+
+  /**
+   * Get current display mode
+   */
+  getDisplayMode(): HierarchyDisplayMode {
+    return this.currentDisplayMode;
   }
 }

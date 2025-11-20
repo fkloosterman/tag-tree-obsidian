@@ -300,7 +300,11 @@ export class TagTreeSettingsTab extends PluginSettingTab {
             .setIcon("pencil")
             .setTooltip("Edit view")
             .onClick(() => {
-              new ViewEditorModal(this.app, this.plugin, view, (edited) => {
+              // Get the effective display mode (override or config default)
+              const viewState = this.plugin.settings.viewStates[view.name];
+              const effectiveDisplayMode = viewState?.displayModeOverride ?? view.displayMode ?? "tree";
+
+              new ViewEditorModal(this.app, this.plugin, view, effectiveDisplayMode, (edited) => {
                 this.plugin.settings.savedViews[index] = edited;
                 this.plugin.saveSettings();
                 this.plugin.updateViewCommands();
@@ -351,7 +355,7 @@ export class TagTreeSettingsTab extends PluginSettingTab {
         .setButtonText("+ New View")
         .setCta()
         .onClick(() => {
-          new ViewEditorModal(this.app, this.plugin, null, (created) => {
+          new ViewEditorModal(this.app, this.plugin, null, null, (created) => {
             this.plugin.settings.savedViews.push(created);
             this.plugin.saveSettings();
             this.plugin.updateViewCommands(); // Update commands for new view
@@ -546,6 +550,7 @@ class ViewEditorModal extends Modal {
     app: App,
     plugin: TagTreePlugin,
     view: HierarchyConfig | null,
+    effectiveDisplayMode: "tree" | "flat" | null,
     onSave: (view: HierarchyConfig) => void
   ) {
     super(app);
@@ -568,6 +573,10 @@ class ViewEditorModal extends Modal {
           expression: "",
         };
       }
+      // Override displayMode with effective mode if provided
+      if (effectiveDisplayMode) {
+        this.workingView.displayMode = effectiveDisplayMode;
+      }
     } else {
       // Create new view with defaults
       this.workingView = createHierarchyConfig({
@@ -580,6 +589,10 @@ class ViewEditorModal extends Modal {
           expression: "",
         },
       });
+      // Set display mode for new view
+      if (effectiveDisplayMode) {
+        this.workingView.displayMode = effectiveDisplayMode;
+      }
     }
   }
 
@@ -709,6 +722,20 @@ class ViewEditorModal extends Modal {
           })
       );
 
+    // Display mode
+    new Setting(sortingSection)
+      .setName("Display mode")
+      .setDesc("Choose how to display the hierarchy: tree (nested) or flattened (single level with combined labels)")
+      .addDropdown((dropdown) =>
+        dropdown
+          .addOption("tree", "Tree (nested hierarchy)")
+          .addOption("flat", "Flattened (single level)")
+          .setValue(this.workingView.displayMode ?? "tree")
+          .onChange((value) => {
+            this.workingView.displayMode = value as "tree" | "flat";
+          })
+      );
+
     // Level colors section (collapsible)
     const colorsSection = this.createCollapsibleSection(
       contentWrapper,
@@ -724,8 +751,9 @@ class ViewEditorModal extends Modal {
       .addDropdown((dropdown) =>
         dropdown
           .addOption("none", "None (disabled)")
+          .addOption("text", "Text color")
           .addOption("background", "Background")
-          .addOption("border", "Left border")
+          .addOption("left-border", "Left border")
           .addOption("icon", "Icon color")
           .setValue(this.workingView.levelColorMode || "none")
           .onChange((value) => {
@@ -1926,6 +1954,14 @@ class ViewEditorModal extends Modal {
     ) {
       new Notice(`A view with the name "${this.workingView.name}" already exists`);
       return;
+    }
+
+    // Clear the displayModeOverride since we're saving the effective mode as the config default
+    if (this.view?.name) {
+      const viewState = this.plugin.settings.viewStates[this.view.name];
+      if (viewState) {
+        delete viewState.displayModeOverride;
+      }
     }
 
     // Save

@@ -4,7 +4,12 @@ import { FilterConfig } from "./filters";
 /**
  * Level color modes for visual hierarchy differentiation
  */
-export type LevelColorMode = "none" | "background" | "border" | "icon";
+export type LevelColorMode = "none" | "text" | "background" | "left-border" | "icon";
+
+/**
+ * Display mode for hierarchy structure
+ */
+export type HierarchyDisplayMode = "tree" | "flat";
 
 /**
  * Base hierarchy level interface
@@ -103,6 +108,9 @@ export interface HierarchyConfig {
 
   /** Filter types to expose in toolbar (for quick overrides) */
   toolbarFilterTypes?: import("./filters").FilterType[];
+
+  /** Display mode: tree (nested) or flat (single-level with combined labels) */
+  displayMode?: HierarchyDisplayMode;
 }
 
 /**
@@ -121,6 +129,7 @@ export const DEFAULT_HIERARCHY_CONFIG: Partial<HierarchyConfig> = {
   defaultExpanded: 1,
   defaultNodeSortMode: "alpha-asc",
   defaultFileSortMode: "alpha-asc",
+  displayMode: "tree",
 };
 
 /**

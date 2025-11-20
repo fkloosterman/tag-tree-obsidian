@@ -572,6 +572,240 @@ export class TreeBuilder {
   }
 
   /**
+   * Build a flattened tree (single level with combined group labels)
+   *
+   * @param config - Hierarchy configuration
+   * @param viewState - Optional view state for runtime sort overrides
+   * @returns Root tree node with flattened structure
+   */
+  buildFlattenedTree(config: HierarchyConfig, viewState?: ViewState): TreeNode {
+    // Get initial file set (optionally filtered by filters)
+    const allFiles = this.indexer.getAllFiles();
+    let files: TFile[];
+
+    if (config.filters && config.filters.filters && config.filters.filters.length > 0) {
+      // Apply filters using FilterEvaluator
+      const filterEvaluator = new FilterEvaluator(this.app, this.indexer);
+      files = allFiles.filter((file) => filterEvaluator.evaluateFilters(file, config.filters));
+    } else {
+      files = allFiles;
+    }
+
+    // Group files by their complete flattened path
+    const pathGroups = new Map<string, { files: TFile[], path: Array<{ segment: string; levelIndex: number; levelType: "tag" | "property" }> }>();
+
+    for (const file of files) {
+      // Get all possible path combinations for this file (handles multi-value expansion)
+      const allPaths = this.computeAllFlattenedPaths(file, config.levels);
+
+      for (const flattenedPath of allPaths) {
+        // Create a unique key for this path combination
+        const pathKey = flattenedPath.map(p => `${p.levelIndex}:${p.segment}`).join('|');
+
+        if (!pathGroups.has(pathKey)) {
+          pathGroups.set(pathKey, { files: [], path: flattenedPath });
+        }
+        pathGroups.get(pathKey)!.files.push(file);
+      }
+    }
+
+    // Create root node
+    const root: TreeNode = {
+      id: "root",
+      name: "Root",
+      type: "tag",
+      children: [],
+      depth: 0,
+      files: [],
+      fileCount: 0,
+    };
+
+    // Create flattened nodes
+    for (const [pathKey, group] of pathGroups.entries()) {
+      if (group.files.length === 0) continue;
+
+      // Create combined display name
+      const displayName = this.createFlattenedNodeName(group.path, config.levels);
+
+      // Create unique ID for this flattened group
+      const nodeId = `flattened:${pathKey}`;
+
+      // Create the flattened node
+      const node: TreeNode = {
+        id: nodeId,
+        name: displayName,
+        type: "tag", // Use tag type for consistency
+        children: [],
+        depth: 1, // All flattened nodes are at depth 1
+        files: [],
+        fileCount: group.files.length,
+        metadata: {
+          flattenedPath: group.path,
+          levelIndex: 0, // All flattened nodes are conceptually at level 0
+        },
+      };
+
+      // Add file children
+      for (const file of group.files) {
+        const fileNode = createFileNode(file, 2, node.id);
+        fileNode.parent = node;
+        node.children.push(fileNode);
+      }
+
+      root.children.push(node);
+      node.parent = root;
+    }
+
+    // Calculate aggregate file counts (though all are already set)
+    this.calculateFileCounts(root);
+
+    // Apply sorting with per-level and file-specific logic
+    this.sortTreeRecursiveNew(root, config, viewState, 0);
+
+    return root;
+  }
+
+  /**
+   * Compute all possible flattened paths for a file across all hierarchy levels
+   * Handles multi-value expansion by generating Cartesian product of all possible combinations
+   * Returns array of path arrays, or empty array if file doesn't match any levels
+   */
+  private computeAllFlattenedPaths(
+    file: TFile,
+    levels: HierarchyLevel[]
+  ): Array<Array<{ segment: string; levelIndex: number; levelType: "tag" | "property" }>> {
+    // Get all possible segments for each level
+    const levelSegments: Array<Array<{ segment: string; levelIndex: number; levelType: "tag" | "property" }>> = [];
+
+    for (let levelIndex = 0; levelIndex < levels.length; levelIndex++) {
+      const level = levels[levelIndex];
+      const rawSegments = this.getFileSegmentsForLevel(file, level, levelIndex);
+
+      if (rawSegments.length === 0) {
+        // File doesn't match this level at all
+        return [];
+      }
+
+      // Convert to formatted segments with level index and type
+      const formattedSegments = rawSegments.map(segment => ({
+        segment: this.formatSegmentForLevel(segment, level),
+        levelIndex,
+        levelType: level.type
+      }));
+
+      levelSegments.push(formattedSegments);
+    }
+
+    if (levelSegments.length === 0) {
+      return [];
+    }
+
+    // Generate Cartesian product of all level combinations
+    return this.cartesianProduct(levelSegments);
+  }
+
+  /**
+   * Generate Cartesian product of arrays
+   */
+  private cartesianProduct<T>(arrays: T[][]): T[][] {
+    return arrays.reduce<T[][]>(
+      (acc, curr) => acc.flatMap(a => curr.map(b => [...a, b])),
+      [[]]
+    );
+  }
+
+  /**
+   * Get all possible segment values for a file at a specific hierarchy level
+   */
+  private getFileSegmentsForLevel(
+    file: TFile,
+    level: HierarchyLevel,
+    levelIndex: number
+  ): string[] {
+    if (level.type === "property") {
+      const propertyLevel = level as PropertyHierarchyLevel;
+      const props = this.indexer.getFileProperties(file);
+      const value = props[level.key];
+
+      if (value === undefined) {
+        return [];
+      }
+
+      // Handle list properties
+      if (Array.isArray(value)) {
+        if (propertyLevel.separateListValues) {
+          // Each list item becomes a separate segment
+          return value.map(v => String(v));
+        } else {
+          // Combined list as single segment
+          return [`[${value.map(v => String(v)).join(", ")}]`];
+        }
+      } else {
+        // Single value
+        return [String(value)];
+      }
+    } else if (level.type === "tag") {
+      const tagLevel = level as TagHierarchyLevel;
+
+      // Find matching tags at the appropriate depth
+      const matchingTags = this.findMatchingTags(
+        file,
+        tagLevel.key,
+        undefined, // No parent tag path for flattened view
+        tagLevel.depth === -1 ? 999 : (tagLevel.depth || 1) // Unlimited or specific depth
+      );
+
+      return matchingTags;
+    }
+
+    return [];
+  }
+
+  /**
+   * Format a segment value according to level configuration
+   */
+  private formatSegmentForLevel(segment: string, level: HierarchyLevel): string {
+    if (level.type === "property") {
+      const propertyLevel = level as PropertyHierarchyLevel;
+      if (propertyLevel.showPropertyName) {
+        const prefix = propertyLevel.label || level.key;
+        return `${prefix} = ${segment}`;
+      }
+      return segment;
+    } else if (level.type === "tag") {
+      const tagLevel = level as TagHierarchyLevel;
+      if (tagLevel.showFullPath) {
+        return segment; // Already full path
+      }
+      // Show last segment only
+      const segments = segment.split("/");
+      return segments[segments.length - 1];
+    }
+
+    return segment;
+  }
+
+  /**
+   * Create display name for a flattened node by combining path segments
+   */
+  private createFlattenedNodeName(
+    path: Array<{ segment: string; levelIndex: number }>,
+    levels: HierarchyLevel[]
+  ): string {
+    if (path.length === 0) {
+      return "Unmatched Files";
+    }
+
+    // Apply level-specific formatting and combine with separators
+    const formattedSegments = path.map(({ segment, levelIndex }) => {
+      const level = levels[levelIndex];
+      return this.formatSegmentForLevel(segment, level);
+    });
+
+    return formattedSegments.join("; ");
+  }
+
+  /**
    * Check if we should use buildFromTags for optimization
    *
    * @param config - Hierarchy configuration

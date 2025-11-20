@@ -116,6 +116,11 @@ export class TagTreeView extends ItemView {
 
       // Create and render toolbar
       const toolbarContainer = container.createDiv("tag-tree-nav-header");
+
+      // Get current display mode for toolbar initialization
+      const viewState = this.plugin.settings.viewStates[this.currentViewName];
+      const currentDisplayMode = viewState?.displayModeOverride ?? "tree";
+
       this.toolbar = new TreeToolbar(
         {
           onFileSortChange: (mode: FileSortMode) => {
@@ -149,12 +154,16 @@ export class TagTreeView extends ItemView {
           onQuickFilterChange: () => {
             this.handleQuickFilterChange();
           },
+          onDisplayModeToggle: () => {
+            this.handleDisplayModeToggle();
+          },
         },
         this.treeComponent.getFileSortMode(),
         this.treeComponent.getFileVisibility(),
         this.plugin.settings.savedViews,
         this.currentViewName,
-        this.getCurrentViewConfig()
+        this.getCurrentViewConfig(),
+        currentDisplayMode
       );
       this.toolbar.render(toolbarContainer);
 
@@ -295,6 +304,11 @@ export class TagTreeView extends ItemView {
     if (this.toolbar) {
       this.toolbar.setCurrentViewName(viewName);
       this.toolbar.setCurrentViewConfig(this.getCurrentViewConfig());
+
+      // Update display mode for the new view
+      const newViewState = this.plugin.settings.viewStates[viewName];
+      const newDisplayMode = newViewState?.displayModeOverride ?? "tree";
+      this.toolbar.setDisplayMode(newDisplayMode);
     }
 
     // Clear expanded nodes when switching views (or restore view-specific state)
@@ -422,6 +436,61 @@ export class TagTreeView extends ItemView {
   }
 
   /**
+   * Handle display mode toggle from toolbar
+   */
+  private handleDisplayModeToggle(): void {
+    console.log("[TagTreeView] handleDisplayModeToggle called");
+    
+    if (!this.treeBuilder || !this.treeComponent) {
+      console.log("[TagTreeView] Missing treeBuilder or treeComponent");
+      return;
+    }
+
+    // Get current view state
+    let viewState = this.plugin.settings.viewStates[this.currentViewName];
+    const oldMode = viewState?.displayModeOverride ?? "tree";
+    
+    if (!viewState) {
+      this.plugin.settings.viewStates[this.currentViewName] = {
+        ...DEFAULT_VIEW_STATE,
+        displayModeOverride: "flat", // Toggle from default "tree" to "flat"
+      };
+      viewState = this.plugin.settings.viewStates[this.currentViewName];
+    } else {
+      // Toggle between "tree" and "flat"
+      const currentMode = viewState.displayModeOverride ?? "tree";
+      viewState.displayModeOverride = currentMode === "tree" ? "flat" : "tree";
+    }
+    
+    const newMode = viewState.displayModeOverride;
+    console.log("[TagTreeView] Mode change:", { from: oldMode, to: newMode });
+
+    // Save settings IMMEDIATELY before rebuild to ensure mode is persisted
+    this.plugin.saveSettings();
+
+    // Reset expanded nodes and expansion initialization state since tree structure changes completely between flat and tree views
+    this.treeComponent.resetExpansionState();
+
+    // Rebuild and re-render tree with new display mode
+    const container = this.containerEl.querySelector(
+      ".tag-tree-content"
+    ) as HTMLElement;
+    if (container) {
+      this.buildAndRenderTree(container);
+    }
+
+    // Update toolbar display mode AFTER rebuilding tree to ensure button state is correct
+    if (this.toolbar) {
+      const finalMode = newMode ?? "tree";
+      console.log("[TagTreeView] Setting toolbar display mode to:", finalMode);
+      this.toolbar.setDisplayMode(finalMode);
+    }
+
+    // Save view state (for expanded nodes, etc.)
+    this.saveViewState();
+  }
+
+  /**
    * Build and render tree based on current view configuration
    */
   private buildAndRenderTree(container: HTMLElement): void {
@@ -462,7 +531,7 @@ export class TagTreeView extends ItemView {
       container.removeAttribute("data-level-color-mode");
     }
 
-    // Set data attribute if file color is configured
+    // Set data attribute if file color is configured (independent of level color mode)
     if (viewConfig.fileColor) {
       container.setAttribute("data-has-file-color", "true");
     } else {
@@ -501,10 +570,17 @@ export class TagTreeView extends ItemView {
       container.style.removeProperty('--file-color');
     }
 
-    // Build tree from hierarchy configuration
-    // TreeBuilder will internally optimize for simple tag hierarchies (depth=-1)
+    // Build tree based on display mode
     const viewState = this.plugin.settings.viewStates[this.currentViewName];
-    const tree = this.treeBuilder.buildFromHierarchy(viewConfig, viewState);
+    const effectiveDisplayMode = viewState?.displayModeOverride ?? viewConfig.displayMode ?? "tree";
+
+    let tree: TreeNode;
+    if (effectiveDisplayMode === "flat") {
+      tree = this.treeBuilder.buildFlattenedTree(viewConfig, viewState);
+    } else {
+      // TreeBuilder will internally optimize for simple tag hierarchies (depth=-1)
+      tree = this.treeBuilder.buildFromHierarchy(viewConfig, viewState);
+    }
 
     // Update toolbar with unique file count and current view config
     if (this.toolbar) {
@@ -611,11 +687,16 @@ export class TagTreeView extends ItemView {
       ".tag-tree-content"
     ) as HTMLElement;
 
+    // Get existing state to preserve displayModeOverride
+    const existingState = this.plugin.settings.viewStates[this.currentViewName];
+    
     const state: ViewState = {
       expandedNodes: Array.from(this.treeComponent.getExpandedNodes()),
       showFiles: this.treeComponent.getFileVisibility(),
       fileSortMode: this.treeComponent.getFileSortMode(),
       scrollPosition: treeContent?.scrollTop ?? 0,
+      // Preserve displayModeOverride if it exists
+      displayModeOverride: existingState?.displayModeOverride,
     };
 
     this.plugin.settings.viewStates[this.currentViewName] = state;

@@ -17,6 +17,7 @@ export interface CodeblockConfig {
   format?: "details" | "list"; // Default: "details"
   expanded?: number; // Default expansion depth
   showFiles?: boolean; // Show file nodes, default: true
+  displayMode?: "tree" | "flat"; // Display mode, default: "tree"
 }
 
 /**
@@ -29,6 +30,7 @@ export interface CodeblockConfig {
  * format: details
  * expanded: 2
  * showFiles: true
+ * displayMode: tree
  * ```
  */
 export class TagTreeCodeblockProcessor {
@@ -49,6 +51,7 @@ export class TagTreeCodeblockProcessor {
       format: "details",
       expanded: 1,
       showFiles: true,
+      displayMode: "tree",
     };
 
     // Parse YAML-like syntax
@@ -100,6 +103,12 @@ export class TagTreeCodeblockProcessor {
         case "show_files":
           config.showFiles = value.toLowerCase() === "true";
           break;
+        case "displaymode":
+        case "display_mode":
+          if (value === "tree" || value === "flat") {
+            config.displayMode = value;
+          }
+          break;
       }
     }
 
@@ -148,9 +157,14 @@ export class TagTreeCodeblockProcessor {
 
       const builder = new TreeBuilder(this.app, indexer);
 
-      // Build tree from hierarchy configuration
-      // TreeBuilder will internally optimize for simple tag hierarchies (depth=-1)
-      const tree = builder.buildFromHierarchy(hierarchyConfig);
+      // Build tree from hierarchy configuration based on display mode
+      let tree: any;
+      if (config.displayMode === "flat") {
+        tree = builder.buildFlattenedTree(hierarchyConfig);
+      } else {
+        // TreeBuilder will internally optimize for simple tag hierarchies (depth=-1)
+        tree = builder.buildFromHierarchy(hierarchyConfig);
+      }
 
       // Create a container for the tree
       const treeContainer = el.createDiv("tag-tree-codeblock");
