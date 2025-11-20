@@ -17,6 +17,7 @@ export interface TreeToolbarCallbacks {
   onFilterOverrideToggle?: (enabled: boolean) => void;
   onQuickFilterChange?: () => void; // Called when a quick filter value changes
   onDisplayModeToggle?: () => void; // Called when display mode is toggled
+  onOpenViewSettings?: () => void; // Called when settings button is clicked
 }
 
 /**
@@ -96,25 +97,34 @@ export class TreeToolbar {
     }
 
     // Collapsible header with view name
-    const summary = details.createEl("summary", { cls: "tag-tree-toolbar-header" });
+    const summary = details.createEl("summary", { cls: "tag-tree-toolbar-summary" });
+    const headerContainer = summary.createDiv({ cls: "tag-tree-toolbar-header" });
 
-    // View name (clickable for view switching if multiple views exist)
-    const viewTitle = summary.createDiv({ cls: "tag-tree-toolbar-title" });
-    viewTitle.textContent = this.currentViewName;
+    // First line: View name and switcher
+    const headerFirstLine = headerContainer.createDiv({ cls: "tag-tree-toolbar-header-first-line" });
 
-    // Make title clickable for view switching if multiple views exist
+    // View name (no icon)
+    const viewTitle = headerFirstLine.createDiv({ cls: "tag-tree-toolbar-title" });
+    viewTitle.createSpan({ text: this.currentViewName, cls: "tag-tree-toolbar-view-name" });
+
+    // View switcher icon immediately to the right of view name (if multiple views exist)
     if (this.savedViews.length > 1 && this.callbacks.onViewChange) {
-      viewTitle.addClass("clickable");
-      viewTitle.style.cursor = "pointer";
-      viewTitle.addEventListener("click", (e) => {
+      const viewSwitcherIcon = viewTitle.createEl("button", {
+        cls: "clickable-icon tag-tree-view-switcher-icon",
+        attr: {
+          "aria-label": "Switch view",
+        },
+      });
+      setIcon(viewSwitcherIcon, "chevron-down");
+      viewSwitcherIcon.addEventListener("click", (e) => {
         e.preventDefault();
         e.stopPropagation();
-        this.showViewSwitcherMenu(viewTitle);
+        this.showViewSwitcherMenu(viewSwitcherIcon);
       });
     }
 
     // Second line: Header controls group (reordered)
-    const headerSecondLine = summary.createDiv({ cls: "tag-tree-toolbar-header-second-line" });
+    const headerSecondLine = headerContainer.createDiv({ cls: "tag-tree-toolbar-header-second-line" });
     const headerControlsGroup = headerSecondLine.createDiv({ cls: "tag-tree-header-controls" });
 
     // Display mode toggle in header (first)
@@ -216,6 +226,31 @@ export class TreeToolbar {
       });
     }
 
+    // Settings button in header (last)
+    if (this.callbacks.onOpenViewSettings) {
+      const settingsBtn = headerControlsGroup.createEl("button", {
+        cls: "clickable-icon tag-tree-header-control",
+        attr: {
+          "aria-label": "Open view settings",
+        },
+      });
+      // Try to use an icon that's definitely available
+      try {
+        setIcon(settingsBtn, "sliders");
+      } catch (e) {
+        // Fallback: add text if icon fails
+        settingsBtn.textContent = "⚙";
+        settingsBtn.style.fontSize = "14px";
+      }
+      settingsBtn.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (this.callbacks.onOpenViewSettings) {
+          this.callbacks.onOpenViewSettings();
+        }
+      });
+    }
+
     // Track collapse state
     details.addEventListener("toggle", () => {
       this.isCollapsed = !details.hasAttribute("open");
@@ -246,6 +281,7 @@ export class TreeToolbar {
     filesCount.style.fontSize = "0.9em";
     filesCount.style.color = "var(--text-muted)";
     filesCount.style.marginBottom = "var(--size-4-2)";
+    filesCount.style.fontWeight = "600"; // Make it bold
 
     // For now, just show the filtered count. In a real implementation, we'd need total count
     // TODO: Add total file count tracking
@@ -254,24 +290,30 @@ export class TreeToolbar {
       ? `Found ${this.fileCount} files (filtered)`
       : `Found ${this.fileCount} files`;
 
+    // Filters title (always show)
+    const filtersTitle = toolbar.createEl("div", { cls: "tag-tree-filters-title" });
+    filtersTitle.style.fontWeight = "600";
+    filtersTitle.style.fontSize = "0.9em";
+    filtersTitle.style.marginBottom = "var(--size-4-2)";
+    filtersTitle.createSpan({ text: "Filters " });
+    const countSpan = filtersTitle.createSpan({ text: `(${this.fileCount} files)` });
+    countSpan.style.color = "var(--text-muted)";
+    countSpan.style.fontWeight = "400";
+
     // Filters section
     if (this.currentViewConfig?.filters && this.currentViewConfig.filters.filters?.length > 0) {
-      const filtersTitle = toolbar.createEl("div", { cls: "tag-tree-filters-title" });
-      filtersTitle.style.fontWeight = "600";
-      filtersTitle.style.fontSize = "0.9em";
-      filtersTitle.style.marginBottom = "var(--size-4-2)";
-      filtersTitle.textContent = "Filters";
 
-      // Filter expression
-      const toolbarVisibleFilters = this.currentViewConfig.filters.filters.filter(
-        lf => lf.enabled !== false && lf.showInToolbar === true
-      );
-      this.renderFilterExpression(toolbar, toolbarVisibleFilters);
+      // Filter expression (always show first)
+      const allFilters = this.currentViewConfig.filters.filters;
+      this.renderFilterExpression(toolbar, allFilters);
 
       // Filter descriptions
       this.renderFilterDescriptions(toolbar);
 
       // Interactive filter controls (for eye-selected filters)
+      const toolbarVisibleFilters = this.currentViewConfig.filters.filters.filter(
+        lf => lf.enabled !== false && lf.showInToolbar === true
+      );
       if (toolbarVisibleFilters.length > 0) {
         const filterControlsRow = toolbar.createDiv("tag-tree-toolbar-row");
         this.renderInteractiveFilters(filterControlsRow, toolbarVisibleFilters);
@@ -362,11 +404,6 @@ export class TreeToolbar {
     section.style.borderRadius = "var(--radius-s)";
     section.style.marginBottom = "var(--size-4-2)";
 
-    // Show filter expression with highlighted quick filter labels
-    if (this.currentViewConfig?.filters) {
-      this.renderFilterExpression(section, interactiveFilters);
-    }
-
     // Render each filter as a row
     interactiveFilters.forEach((labeledFilter) => {
       this.renderQuickFilterRow(section, labeledFilter);
@@ -386,8 +423,8 @@ export class TreeToolbar {
     const quickFilterLabels = new Set(interactiveFilters.map(f => f.label));
 
     const expressionContainer = container.createDiv({ cls: "tag-tree-filter-expression" });
-    expressionContainer.style.marginBottom = "var(--size-4-2)";
-    expressionContainer.style.fontSize = "0.9em";
+    expressionContainer.style.marginBottom = "var(--size-2-1)"; // Reduced gap
+    expressionContainer.style.fontSize = "var(--font-ui-small)"; // Standard Obsidian font
 
     const label = expressionContainer.createSpan({ text: "Expression: " });
     label.style.color = "var(--text-muted)";
@@ -787,14 +824,18 @@ export class TreeToolbar {
 
     const allFilters = this.currentViewConfig.filters.filters.filter(lf => lf.enabled !== false);
 
-    // Show ALL filters (not just eye-selected ones) - no bullets, less indentation, larger font
+    // Show ALL filters (not just eye-selected ones) - no bullets, less indentation, standard font
     const filtersContainer = container.createEl("div", { cls: "tag-tree-filter-descriptions" });
-    filtersContainer.style.marginTop = "var(--size-4-2)";
-    filtersContainer.style.fontSize = "1.1em";
+    filtersContainer.style.marginTop = "var(--size-2-1)"; // Reduced gap
+    filtersContainer.style.fontSize = "var(--font-ui-medium)"; // Larger font for visibility
+    filtersContainer.style.fontWeight = "normal"; // Normal font weight
+    filtersContainer.style.color = "var(--text-normal)"; // Explicit color
 
     allFilters.forEach((labeledFilter) => {
       const filterRow = filtersContainer.createEl("div");
       filterRow.style.marginBottom = "var(--size-2-2)";
+      filterRow.style.fontWeight = "normal"; // Normal font weight
+      filterRow.style.color = "var(--text-normal)"; // Explicit color
 
       const filterText = `${labeledFilter.label}: ${this.getFilterDescription(labeledFilter.filter as any)}`;
       filterRow.textContent = filterText;
@@ -858,7 +899,7 @@ export class TreeToolbar {
       }
     }
 
-    return `Grouped by: ${descriptions.join(" → ")}`;
+    return descriptions.join(" → ");
   }
 
   /**
@@ -868,24 +909,24 @@ export class TreeToolbar {
     switch (filter.type) {
       case "tag": {
         const mode = filter.matchMode === "exact" ? "exactly matches" :
-                     filter.matchMode === "contains" ? "contains" : "starts with";
-        return `Tag ${mode} "${filter.tag}"`;
+                      filter.matchMode === "contains" ? "contains" : "starts with";
+        return `Tag ${mode} ${filter.tag}`;
       }
       case "property-exists":
-        return filter.negate ? `File does not have property "${filter.property}"` : `File has property "${filter.property}"`;
+        return filter.negate ? `File does not have property ${filter.property}` : `File has property ${filter.property}`;
       case "property-value": {
         if (filter.operator === "is-true") {
-          return `Property "${filter.property}" is true`;
+          return `Property ${filter.property} is true`;
         } else if (filter.operator === "is-false") {
-          return `Property "${filter.property}" is false`;
+          return `Property ${filter.property} is false`;
         } else {
           const operatorLabel = this.getOperatorLabel(filter.operator);
-          return `Property "${filter.property}" ${operatorLabel} ${filter.value}`;
+          return `Property ${filter.property} ${operatorLabel} ${filter.value}`;
         }
       }
       case "file-path": {
         const mode = filter.matchMode === "regex" ? "matches regex" : "matches";
-        return `File path ${mode} "${filter.pattern}"`;
+        return `File path ${mode} ${filter.pattern}`;
       }
       case "file-size": {
         const op = filter.operator === "lt" ? "less than" :
@@ -1038,6 +1079,11 @@ export class TreeToolbar {
     // This allows fresh originals to be stored for the new view
     this.originalFilterValues.clear();
 
+    // Trigger a refresh to recount files for the new view
+    if (this.callbacks.onRefreshTree) {
+      this.callbacks.onRefreshTree();
+    }
+
     // Re-render toolbar to update view dropdown and header
     if (this.container) {
       this.render(this.container);
@@ -1095,9 +1141,18 @@ export class TreeToolbar {
 
     // Update file count displays without re-rendering the entire toolbar
     if (this.container) {
-      // Update count in main filters title
-      const mainCountSpans = this.container.querySelectorAll('.tag-tree-filters-title span:last-child');
-      mainCountSpans.forEach(span => {
+      // Update count in files count display
+      const filesCountEl = this.container.querySelector('.tag-tree-files-count') as HTMLElement;
+      if (filesCountEl) {
+        const hasFilters = this.currentViewConfig?.filters && this.currentViewConfig.filters.filters?.length > 0;
+        filesCountEl.textContent = hasFilters
+          ? `Found ${this.fileCount} files (filtered)`
+          : `Found ${this.fileCount} files`;
+      }
+
+      // Update count in filters title
+      const filterCountSpans = this.container.querySelectorAll('.tag-tree-filters-title span:last-child');
+      filterCountSpans.forEach(span => {
         span.textContent = `(${this.fileCount} files)`;
       });
     }

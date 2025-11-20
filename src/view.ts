@@ -3,6 +3,7 @@ import { VaultIndexer } from "./indexer/vault-indexer";
 import { TreeBuilder } from "./tree/tree-builder";
 import { TreeComponent } from "./components/tree-component";
 import { TreeToolbar } from "./components/tree-toolbar";
+import { ViewEditorModal } from "./components/view-editor-modal";
 import { ViewState, SortMode, FileSortMode, DEFAULT_VIEW_STATE } from "./types/view-state";
 import { HierarchyConfig } from "./types/hierarchy-config";
 import { SearchQueryBuilder } from "./utils/search-query-builder";
@@ -156,6 +157,9 @@ export class TagTreeView extends ItemView {
           },
           onDisplayModeToggle: () => {
             this.handleDisplayModeToggle();
+          },
+          onOpenViewSettings: () => {
+            this.handleOpenViewSettings();
           },
         },
         this.treeComponent.getFileSortMode(),
@@ -433,6 +437,44 @@ export class TagTreeView extends ItemView {
     if (container) {
       this.buildAndRenderTree(container);
     }
+  }
+
+  /**
+   * Handle settings button click from toolbar
+   */
+  private handleOpenViewSettings(): void {
+    // Get the current view configuration
+    const currentViewConfig = this.getCurrentViewConfig();
+    if (!currentViewConfig) {
+      console.error("[TagTreeView] Cannot open settings: no current view config");
+      return;
+    }
+
+    // Get the effective display mode
+    const viewState = this.plugin.settings.viewStates[this.currentViewName];
+    const effectiveDisplayMode = viewState?.displayModeOverride ?? currentViewConfig.displayMode ?? "tree";
+
+    // Open the view editor modal for the current view
+    const modal = new ViewEditorModal(this.app, this.plugin, currentViewConfig, effectiveDisplayMode, (edited: HierarchyConfig) => {
+      // Find the index of the current view
+      const viewIndex = this.plugin.settings.savedViews.findIndex(v => v.name === this.currentViewName);
+      if (viewIndex !== -1) {
+        this.plugin.settings.savedViews[viewIndex] = edited;
+        this.plugin.saveSettings();
+        this.plugin.updateViewCommands();
+
+        // Update the current view name if it changed
+        if (edited.name !== this.currentViewName) {
+          this.currentViewName = edited.name;
+          this.app.workspace.requestSaveLayout();
+        }
+
+        // Refresh all views with the updated view
+        this.plugin.refreshAllViews(edited.name);
+      }
+    });
+
+    modal.open();
   }
 
   /**
